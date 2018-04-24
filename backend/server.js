@@ -6,7 +6,7 @@ const RouterModule    = require('./app/router');
 import { logger } from './app/lib/logger';
 const SERVER_PORT = process.env.PORT || 80;
 const REQUEST_BODY_LIMIT_SIZE = process.env.REQUEST_BODY_LIMIT_SIZE || 11534336;
-import initMiner from 'lib/miner';
+import BlockCreator from 'lib/blockCreator';
 
 let app = express();
 
@@ -18,7 +18,7 @@ app.use(RouterModule.router);
 
 require('./app/lib/errorHandler')(app);
 
-initMiner();
+BlockCreator.start();
 
 app.listen(SERVER_PORT, function () {
   logger.info('Process ' + process.pid + ' is listening on ' + SERVER_PORT);

@@ -98,7 +98,6 @@ async function checkTransactionInputs(transaction) {
       // allow deposit transaction only signed by operator
       let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
       let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
-
       return address1 == address2 && plasmaOperatorAddress.toLowerCase() == address1;
     }
     
