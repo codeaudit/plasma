@@ -23,7 +23,6 @@ async function getUTXO(blockNumber, txNumber, outputNumber) {
     return new TransactionOutput(data);
   }
   catch(err) {
-    console.log('getUTXO err ', err);
     return null;
   }
 }
@@ -77,8 +76,8 @@ async function createSignedTransaction(data) {
       return false;
     }
     
-    txData[`newowner${inputIndex + 1}`] = newowner;
-    txData[`denom${inputIndex + 1}`] = denom;
+    txData[`newowner${outputIndex + 1}`] = newowner;
+    txData[`denom${outputIndex + 1}`] = denom;
     outputsTotalAmount = outputsTotalAmount.add(denom);
     outputIndex++;
   }
@@ -95,7 +94,6 @@ async function checkTransactionInputs(transaction) {
   try {
     let txInputKeys = transaction.getInputKeys();
     if (txInputKeys.join('') == depositInputKey + depositInputKey) {
-      // allow deposit transaction only signed by operator
       let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
       let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
       return address1 == address2 && plasmaOperatorAddress.toLowerCase() == address1;
@@ -111,10 +109,11 @@ async function checkTransactionInputs(transaction) {
         if (!utxo) {
           return false;
         }
+
         let address = transaction.getAddressFromSignature(inputIndex);
         address = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
         let newowner = ethUtil.addHexPrefix(utxo.newowner.toString('hex').toLowerCase());
-        
+
         if (address != newowner) {
           return false;
         }

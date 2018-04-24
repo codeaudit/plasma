@@ -33,6 +33,7 @@ class TXPool {
     }
 
     let isValid = await checkTransactionInputs(tx);
+
     if (!isValid) {
       return false;
     }
@@ -111,16 +112,12 @@ class TXPool {
         return false;
       }
       
-      // const lastBlockNumber = Web3.utils.toBN(ethUtil.addHexPrefix(lastBlock.toString('hex')));
-      // const newBlockNumber = lastBlockNumber.add(new BN(config.contractblockStep));
       const newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(this.newBlockNumber), blockNumberLength);
       const blockData = {
         blockNumber:  newBlockNumberBuffer,
         transactions: transactions
       }
       const block = new Block(blockData); 
-
-      // await this.saveBlock(block);
       
       let queryAll = [
         { type: 'put', key: 'lastBlockNumber', value: block.blockNumber },

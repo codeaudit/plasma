@@ -23,7 +23,8 @@ const BN = ethUtil.BN;
 const plasmaOperatorAddress = config.plasmaOperatorAddress;
 
 class BlockCreator {
-  constructor () {
+  constructor (options = {}) {
+    this.options = options || {};
   }
 
   start() {
@@ -52,7 +53,10 @@ class BlockCreator {
 
   
   async initBlockPeriodicalCreation() {
-    const newBlock = await txPool.createNewBlock();
+    if (!(this.options.minTransactionsInBlock && txPool.transactions.length < this.options.minTransactionsInBlock)) {
+      const newBlock = await txPool.createNewBlock();
+    }
+    
     setTimeout(() => this.initBlockPeriodicalCreation(), blockCreationPeriod)
     return true;
   }

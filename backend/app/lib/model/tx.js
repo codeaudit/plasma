@@ -66,7 +66,7 @@ class PlasmaTransaction {
       }
       return res;
     }, []);
-    
+
     this._rlp = RLP.encode(data);
     return this._rlp;
   }
