@@ -36,16 +36,18 @@ class BlockCreator {
   startCheckingContractForEvents() {
     let lastBlock;
     let lastProcessedBlock;
-    
+    let lastCheckedBlock;
+
     return levelDB.get(config.prefixes.lastEventProcessedBlockPrefix)
       .then((res) => {
-        lastProcessedBlock = Web3.utils.toBN(ethUtil.addHexPrefix(res.toString('hex'))).toNumber();
-        this.processPeriodicalBlockEventsCheck(lastProcessedBlock);
+        lastCheckedBlock = Web3.utils.toBN(ethUtil.addHexPrefix(res.toString('hex'))).toNumber();
+        console.log('Start Checking Contract For Events', lastCheckedBlock);
+        this.processPeriodicalBlockEventsCheck(lastCheckedBlock);
       })
       .catch((err) => {
         logger.error('Periodical Events Check err', err);
-        lastProcessedBlock = 0;
-        this.processPeriodicalBlockEventsCheck(lastProcessedBlock);
+        lastCheckedBlock = 0;
+        this.processPeriodicalBlockEventsCheck(lastCheckedBlock);
     });
   }
   
@@ -61,29 +63,28 @@ class BlockCreator {
     return true;
   }
   
-  async processPeriodicalBlockEventsCheck(previousBlockNumber) {
+  async processPeriodicalBlockEventsCheck(lastCheckedBlock) {
     try{
       let lastblock = await web3.eth.getBlockNumber();
-      if (lastblock > previousBlockNumber) {
-        lastblock = previousBlockNumber + 1;
-        await this.processBlock(lastblock);
-        setTimeout(() => this.processPeriodicalBlockEventsCheck(lastblock), 50);
+      if (lastblock > lastCheckedBlock) {
+        await this.processBlock(lastCheckedBlock, lastblock);
+        setTimeout(() => this.processPeriodicalBlockEventsCheck(lastblock), 5000);
         return;
       } else {
-        setTimeout(() => this.processPeriodicalBlockEventsCheck(lastblock), 1000);
+        setTimeout(() => this.processPeriodicalBlockEventsCheck(lastblock), 5000);
         return;
       }
     }
     catch(error) {
       logger.error("processPeriodicalBlockEventsCheck error " + error);
-      setTimeout(() => this.processPeriodicalBlockEventsCheck(previousBlockNumber), 0);
+      setTimeout(() => this.processPeriodicalBlockEventsCheck(lastCheckedBlock), 5000);
     }
   }
-  
-  async processBlock(blockNumber) {
+    
+  async processBlock(lastCheckedBlock, lastBlock) {
     const depositEventsInBlock = await contractHandler.contract.getPastEvents("Deposit", {
-      fromBlock: blockNumber,
-      toBlock: blockNumber
+      fromBlock: lastCheckedBlock,
+      toBlock: lastBlock
     });
 
     if (depositEventsInBlock.length > 0) {
@@ -92,7 +93,7 @@ class BlockCreator {
       }
     }
     
-    const blockNumberBN = Web3.utils.toBN(blockNumber);
+    const blockNumberBN = Web3.utils.toBN(lastBlock);
     const newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(blockNumberBN), blockNumberLength);
     await levelDB.put(config.prefixes.lastEventProcessedBlockPrefix, newBlockNumberBuffer);
   } 
