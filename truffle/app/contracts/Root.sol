@@ -18,6 +18,7 @@ contract Root {
     /*
      * Events
      */
+    event BlockSubmitted(address operator, bytes32 merkleRoot, uint blockNumber);
     event Deposit(address depositor, uint amount, uint depositBlock);
     event Exit(address exitor, uint exitId);
     event ExitChallengedEvent(uint exitId);
@@ -28,6 +29,8 @@ contract Root {
     event Log(bool log);
     event Log(uint log);
     event Log(address log);
+
+    mapping(address => bool) public operators;
 
     uint public currentBlock;
     uint public depositBlock;
@@ -58,7 +61,6 @@ contract Root {
      * Transaction struct
      */
     struct Transaction {
-        uint32 txNumberInBlock;
         uint32 blockNumber1;
         uint32 txNumberInBlock1;
         uint8 outputNumberInTX1;
@@ -72,6 +74,7 @@ contract Root {
         uint fee;
         address sender;
     }
+    
     /*
      * Exit record
      */
@@ -108,25 +111,68 @@ contract Root {
         lastParentBlock = block.number;
     }
 
-    function submitBlock(bytes32 root) public isAuthority {
-        childChain[currentBlock] = Block({
-            merkleRootHash: root,
+    function setOperator(address operator, bool status) public returns (bool success)
+    {
+        require(msg.sender == authority);
+        operators[operator] = status;
+        return true;
+    }
+
+    function submitBlock(bytes32 merkleRoot) public {
+        require(operators[msg.sender] || msg.sender == authority);
+
+        uint nblock = currentBlock;
+        Block memory newBlock = Block({
+            merkleRootHash: merkleRoot,
             createdAt: block.timestamp
         });
+        childChain[nblock] = newBlock;
         currentBlock = currentBlock.add(1000);
         depositBlock = 1;
         lastParentBlock = block.number;
+        emit BlockSubmitted(msg.sender, merkleRoot, nblock);
+    }
+
+    function getTransactionFromRLP(bytes rlp) public pure returns (
+        uint blockNumber1,
+        uint txNumberInBlock1,
+        uint outputNumberInTX1,
+        uint blockNumber2,
+        uint txNumberInBlock2,
+        uint outputNumberInTX2,
+        address newOwner1,
+        uint denom1,
+        address newOwner2,
+        uint denom2,
+        uint fee) {
+        RLP.RLPItem[] memory txList = rlp.toRLPItem().toList();
+        require(txList.length == 11);
+        return (txList[0].toUint(), 
+            txList[1].isEmpty() ? 0 : txList[1].toUint(),
+            txList[2].isEmpty() ? 0 : txList[2].toUint(),
+            txList[3].toUint(),
+            txList[4].isEmpty() ? 0 : txList[4].toUint(),
+            txList[5].isEmpty() ? 0 : txList[5].toUint(),
+            txList[6].toAddress(),
+            txList[7].toUint(),
+            txList[8].toAddress(),
+            txList[9].toUint(),
+            txList[10].toUint()
+        );
+
     }
 
     function deposit() public payable
     {
+        require(operators[msg.sender] || msg.sender == authority);
         require(depositBlock < 1000);
         bytes32 root = keccak256(msg.sender, msg.value);
         uint dblock = getCurrentDepositBlock();
-        childChain[dblock] = Block({
+        Block memory newBlock = Block({
             merkleRootHash: root,
             createdAt: block.timestamp
         });
+        childChain[dblock] = newBlock;
         depositBlock = depositBlock.add(1);
         emit Deposit(msg.sender, msg.value, dblock);
     }
@@ -134,13 +180,13 @@ contract Root {
     function startExit(uint blockNumber, uint txIndex, uint oIndex, bytes txBytes, bytes proof, bytes confirmSig) public returns (uint exitId) {
         require(blockNumber > 0);
 
-        var txList = txBytes.toRLPItem().toList();
+        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
         require(txList.length == 11);
 
         Block memory bl = childChain[blockNumber];
         require(checkSigs(keccak256(txBytes), bl.merkleRootHash, txList[0].toUint(), txList[3].toUint(), confirmSig));
         bytes32 merkleHash = keccak256(keccak256(txBytes), ByteUtils.slice(confirmSig, 0, 130));
-        require(checkProof(merkleHash, bl.merkleRootHash, txBytes, proof));
+        require(checkProof(merkleHash, bl.merkleRootHash, proof));
 
         require(txList[6 + 2 * oIndex].toAddress() == msg.sender);
 
@@ -157,7 +203,7 @@ contract Root {
         ExitRecord storage record = exitRecords[exitId];
         require(record.blockNumber == 0);
 
-        // Construct a new withdrawal.
+        // Construct a new exit.
         record.blockNumber = blockNumber;
         record.txIndex = txIndex;
         record.oIndex = oIndex;
@@ -181,7 +227,6 @@ contract Root {
         bytes32 depositHash = keccak256(msg.sender, amount);
         require(root == depositHash);
 
-
         uint priority = 0;
         uint weekBefore = block.timestamp - week;
 
@@ -194,7 +239,7 @@ contract Root {
         ExitRecord storage record = exitRecords[depositPos];
         require(record.blockNumber == 0);
 
-        // Construct a new withdrawal.
+        // Construct a new exit.
         record.blockNumber = blknum;
         record.txIndex = 0;
         record.oIndex = 0;
@@ -211,31 +256,35 @@ contract Root {
     function challengeExit(
         uint exitId,
         uint blockNumber,
-        uint txIndex,
-        uint oIndex,
         bytes txBytes,
         bytes proof,
         bytes sigs,
         bytes confirmationSig
     ) public returns (bool success)
     {
+        ///emit Log(blockNumber);
         Block memory blk = childChain[blockNumber];
 
-        var txList = txBytes.toRLPItem().toList();
+        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
         require(txList.length == 11);
         
         ExitRecord memory record = exitRecords[exitId];
         require(record.blockNumber > 0);
 
         bytes32 merkleHash = keccak256(keccak256(txBytes), sigs);
-        require(checkProof(merkleHash, blk.merkleRootHash, txBytes, proof));
-        
+        require(checkProof(merkleHash, blk.merkleRootHash, proof));
+        //emit Log(blockNumber);
+        //emit Log(blk.merkleRootHash);
+        //emit Log(record.owner);
         bytes32 confirmationHash = keccak256(keccak256(txBytes), blk.merkleRootHash);
+        //emit Log(ECRecovery.recover(confirmationHash, confirmationSig));
+        //emit Log(merkleHash);
+        //emit Log(ECRecovery.recover(confirmationHash, confirmationSig));
 
-        require(record.owner == ECRecovery.recover(confirmationHash, confirmationSig) );
+        require(record.owner == ECRecovery.recover(confirmationHash, confirmationSig));
 
-        // if the transaction spends the given withdrawal on plasma chain.
-        if (isWithdrawalSpent(txBytes, record)) {
+        // if the transaction spends the given exit on plasma chain.
+        if (isExitSpent(txBytes, record)) {
             exitIds[record.priority].remove(exitId);
             delete exitRecords[exitId];
             emit ExitChallengedEvent(exitId);
@@ -261,7 +310,7 @@ contract Root {
         return true;
     }
 
-    function checkSigs(bytes32 txHash, bytes32 rootHash, uint256 blknum1, uint256 blknum2, bytes sigs) internal view returns (bool)
+    function checkSigs(bytes32 txHash, bytes32 rootHash, uint256 blknum1, uint256 blknum2, bytes sigs) internal pure returns (bool)
     {
         require(sigs.length % 65 == 0 && sigs.length <= 260);
         bytes memory sig1 = ByteUtils.slice(sigs, 0, 65);
@@ -271,6 +320,7 @@ contract Root {
 
         bool check1 = true;
         bool check2 = true;
+        blknum1;
 
         check1 = ECRecovery.recover(txHash, sig1) == ECRecovery.recover(confirmationHash, confSig1);
         if (blknum2 > 0) {
@@ -280,7 +330,7 @@ contract Root {
         return check1 && check2;
     }
 
-    function checkProof(bytes32 merkle, bytes32 root, bytes target, bytes proof) pure internal returns (bool valid)
+    function checkProof(bytes32 merkle, bytes32 root, bytes proof) pure internal returns (bool valid)
     {
         bytes32 hash = merkle;
         for (uint i = 32; i < proof.length; i += 33) {
@@ -299,18 +349,9 @@ contract Root {
         return hash == root;
     }
 
-    function getChain(uint blockNumber) public view returns (bytes32, uint)
+    function isExitSpent(bytes txBytes, ExitRecord record) pure internal returns (bool spent)
     {
-        return (childChain[blockNumber].merkleRootHash, childChain[blockNumber].createdAt);
-    }
-
-    function getBalance(address addr) public view returns(uint) {
-        return addr.balance;
-    }
-
-    function isWithdrawalSpent(bytes txBytes, ExitRecord record) view internal returns (bool spent)
-    {
-        var txList = txBytes.toRLPItem().toList();
+        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
         require(txList.length == 11);
         uint blockNumber;
         uint txIndex;
@@ -352,6 +393,15 @@ contract Root {
     {
         ExitRecord memory er = exitRecords[exitId];
         return ( er.owner, er.amount, er.priority );
+    }
+
+    function getChain(uint blockNumber) public view returns (bytes32, uint)
+    {
+        return (childChain[blockNumber].merkleRootHash, childChain[blockNumber].createdAt);
+    }
+
+    function getBalance(address addr) public view returns(uint) {
+        return addr.balance;
     }
 
 

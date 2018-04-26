@@ -1,22 +1,19 @@
 {
-  "name": "Plasma",
-  "version": "0.0.1",
-  "description": "Plasma",
+  "name": "app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "truffle-config.js",
   "directories": {
     "test": "test"
   },
-  "devDependencies": {
-    "web3": "^1.0.0-beta.29",
-    "solc": "^0.4.19",
-    "ethereumjs-testrpc": "^6.0.3",
-    "truffle": "^4.0.6"
+  "dependencies": {
+    "ethereumjs-util": "^5.1.5",
+    "web3": "^1.0.0-beta.34"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "dependencies": {
-    "chai": "^4.1.2",
-    "global": "^4.3.2",
-    "moment": "^2.20.1",
-    "ethereumjs-abi": "^0.6.5",
-    "lodash": "^4.17.5"
-  }
+  "license": "ISC"
 }
