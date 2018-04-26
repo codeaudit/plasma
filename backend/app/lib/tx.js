@@ -59,6 +59,7 @@ async function createSignedTransaction(data) {
   for (let input of data.inputs) {
     let utxo = await getUTXO(input.blockNumber, input.txNumber, input.outputNumber);
     if (!utxo) {
+      // console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
 
@@ -73,6 +74,7 @@ async function createSignedTransaction(data) {
     let denom = new BN(output.amount);
     let newowner = ethUtil.addHexPrefix(output.address.toLowerCase());
     if (denom.lte(0)) {
+      // console.log('createSignedTransaction===--------2-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
     
@@ -83,6 +85,8 @@ async function createSignedTransaction(data) {
   }
 
   if (!inputsTotalAmount.eq(outputsTotalAmount)) {
+    // console.log('createSignedTransaction===--------3-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+
     return null;
   }
 
@@ -94,8 +98,12 @@ async function checkTransactionInputs(transaction) {
   try {
     let txInputKeys = transaction.getInputKeys();
     if (txInputKeys.join('') == depositInputKey + depositInputKey) {
+      console.log('checkTransactionInputs  1----------------  ',);
+
       let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
       let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
+      console.log('address                  ', address1);
+      console.log('plasmaOperatorAddress    ', plasmaOperatorAddress.toLowerCase());
       return address1 == address2 && plasmaOperatorAddress.toLowerCase() == address1;
     }
     
@@ -107,14 +115,20 @@ async function checkTransactionInputs(transaction) {
       if (input) {
         let utxo = await getUTXO(input[0], input[1], input[2]);
         if (!utxo) {
+          console.log('checkTransactionInputs  !utxo  ',);
+
           return false;
         }
 
         let address = transaction.getAddressFromSignature(inputIndex);
         address = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
         let newowner = ethUtil.addHexPrefix(utxo.newowner.toString('hex').toLowerCase());
-
+        // console.log('address     ', address);
+        // console.log('newowner    ', newowner);
+        
         if (address != newowner) {
+          console.log('checkTransactionInputs  2----------------  ',);
+
           return false;
         }
         inputsTotalAmount = inputsTotalAmount.add(new BN(utxo.denom));
@@ -130,12 +144,17 @@ async function checkTransactionInputs(transaction) {
     }
 
     if (!inputsTotalAmount.eq(outputsTotalAmount)) {
+      console.log('checkTransactionInputs   3----------------  ',);
+
       return false;
     }
     
     return true;
   }
   catch (error) {
+    console.log('checkTransactionInputs   error  ', error);
+    console.log('checkTransactionInputs   transaction  ', transaction);
+
     return false;
   }
 }

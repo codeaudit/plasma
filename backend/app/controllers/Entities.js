@@ -21,6 +21,45 @@ import {
   blockNumberLength
 } from 'lib/dataStructureLengths';
 
+
+router.route('/test')
+  .get(async function(req, res, next) {
+    try { 
+      let test = 'c89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6';
+      // let test1 = 'c89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6';
+
+      // let testKeccak = 'c89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6';
+      // let testKeccak = ethUtil.sha3(test);
+      // let testKeccak = ethUtil.sha3(test);
+      
+      let testHashed =  ethUtil.hashPersonalMessage(Buffer.from(test, 'hex'));
+      // const hash = ethUtil.hashPersonalMessage(dataBuffer);
+
+      console.log('web3.eth.sign              ', web3.eth.sign);
+      console.log('testHashed              ', testHashed);
+
+      // console.log('config.plasmaOperatorAddress              ', config.plasmaOperatorAddress);
+
+      await web3.eth.personal.unlockAccount(config.plasmaOperatorAddress, config.plasmaOperatorPassword, 60);
+      const signature = await web3.eth.sign(ethUtil.addHexPrefix(test), config.plasmaOperatorAddress);
+      console.log('signature              ', signature);
+      let signatureRpc = ethUtil.fromRpcSig(ethUtil.addHexPrefix(signature));
+      console.log('signatureRpc              ', signatureRpc);
+
+      // let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r. signature.s);
+      
+      let publicAddress = ethUtil.ecrecover(testHashed, signatureRpc.v, signatureRpc.r, signatureRpc.s);
+      let address = ethUtil.bufferToHex(ethUtil.pubToAddress(publicAddress));
+      console.log('address              ', address);
+      console.log('plasmaOperatorAddress', config.plasmaOperatorAddress);
+
+      return res.json(address);
+    }
+    catch(error){
+      next(error);
+    }
+  })
+  
 router.route('/block/:id')
   .get(async function(req, res, next) {
     try { 

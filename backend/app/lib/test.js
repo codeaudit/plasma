@@ -18,13 +18,28 @@ import RLP from 'rlp';
 import txPool from 'lib/txPool';
 const BN = ethUtil.BN;
 
-var accounts = {
-  1: {address:'0x11A618DE3ADe9B85Cd811BF45af03bAd481842Ed', pkey: ''},
-  2: {address:'0xA5Fe0dEda5E1a0FCc34B02B5BE6857e30C9023fE', pkey: ''},
-}
+// var accounts = {
+//   1: {address:'0x11A618DE3ADe9B85Cd811BF45af03bAd481842Ed', pkey: ''},
+//   2: {address:'0xA5Fe0dEda5E1a0FCc34B02B5BE6857e30C9023fE', pkey: ''},
+// }
 
+let statistic = {}
 
 async function startTest(options = {}) {
+  statistic = {
+    created: 0,
+    notCreated: 0 
+  }
+  
+  let accounts = await web3.eth.getAccounts();
+  accounts = accounts.map(address => address.toLowerCase());
+  console.log('accounts', accounts);
+  
+  for (let addr of accounts) {
+    await web3.eth.personal.unlockAccount(addr, config.plasmaOperatorPassword, 0);
+    console.log('unlockAccount', addr);
+  }
+  
   let txCount = options.txCount || 1000;
   let transactions = [];
   let deporits = [];
@@ -33,25 +48,165 @@ async function startTest(options = {}) {
   let startTime = Date.now();
   // console.log('startTime', startTime)
 
-  let currentAcc = accounts[1];
-  for (let index = 0; index < 1000; index++) {
-    let uxtos = await getAllUxtos();
-    let uxto1 = uxtos.find(u => u.address.toLowerCase() == accounts[1].address.toLowerCase());
-    let uxto2 = uxtos.find(u => u.address.toLowerCase() == accounts[2].address.toLowerCase());
-
-    if (uxto1 && uxto1.amount) {
-      await createTx(uxto1, accounts[1], accounts[2].address);
-    } else if (uxto2 && uxto2.amount) {
-      await createTx(uxto2, accounts[2], accounts[1].address);
-    }
-  }
+  // let currentAcc = accounts[1];
+  // for (let index = 0; index < 1000; index++) {
+  //   let uxtos = await getAllUxtos();
+  //   let uxto1 = uxtos.find(u => u.address.toLowerCase() == accounts[1].address.toLowerCase());
+  //   let uxto2 = uxtos.find(u => u.address.toLowerCase() == accounts[2].address.toLowerCase());
+  // 
+  //   if (uxto1 && uxto1.amount) {
+  //     await createTx(uxto1, accounts[1], accounts[2].address);
+  //   } else if (uxto2 && uxto2.amount) {
+  //     await createTx(uxto2, accounts[2], accounts[1].address);
+  //   }
+  // }
+  
+  // for (let res of createNewTransactions(accounts, txCount)){
+  //   console.log('------------------------------------')
+  // }
+  await createNewTransactions(accounts, txCount);
+  
   let endTime = Date.now();
   // console.log('endTime', endTime)
   console.log('Time ms: ', endTime - startTime)
+  
+  console.log('statistic ', statistic);
 }
 
-async function createTx(data, account, to) {
+async function createNewTransactions(addresses, txCount) {
+  let accounts = {};
+  addresses.forEach(address => accounts[address] = true);
+  console.log('accounts', accounts);
+  console.log('txCount', txCount);
+
+
+    
+  let count = 0;
+  
+  // for (let count = 0, length = depositEventsInBlock.length; i< length; i++){
+  //   await depositEventHandler(depositEventsInBlock[i]);
+  // }
+
+  var nextAddressGen = getNextAddress(addresses);
+
+  // console.log('nextAddressGen ', nextAddressGen);
+
+  
+  while (count++ <= txCount) {
+    console.log('iteration ----------------------------------- ', count);
+    
+    let accountUtxos = {};
+    let utxos = await getAllUxtos();
+    // console.log('utxos ', utxos);
+
+    utxos = utxos.reduce((res, utxo) => {
+      let addr = utxo.address.toLowerCase();
+      if (accounts[addr]) {
+        res.push(utxo);
+      }
+      return res;
+    }, []);
+    // console.log('utxos1 ', utxos);
+    
+
+    utxos.forEach((uxto, index) => {
+      return createTx(uxto, uxto.address, nextAddressGen.next(uxto.address).value, count);
+    })
+    
+    // await new Promise.race(utxos.map(uxto => {
+    // 
+    //   // console.log('utxos ', getNextAddress.next(uxto.address).value);
+    //   // console.log('1111111111111111111 ',       uxto.address);
+    //   // 
+    //   // console.log('1111111111111111111 ',       nextAddressGen.next(uxto.address).value);
+    //   // console.log('------------- ',);
+    // 
+    //   // return new Promise(async (resolve, reject) => {
+    //   //   await createTx(uxto, uxto.address, nextAddressGen.next(uxto.address).value, count);
+    //   //   resolve();
+    //   // });
+    //   return createTx(uxto, uxto.address, nextAddressGen.next(uxto.address).value, count);
+    //   // let time = 100;
+    //   // new Promise(function(resolve, reject) {
+    //   //     setTimeout(resolve, time++);
+    //   // });
+    // }))
+  }
+  
+}
+
+function* getNextAddress(addresses) {
+  let currentAddress = 0;
+  let address;
+  
+  while(true) {
+    if (!addresses[++currentAddress]) {
+      currentAddress = 0;
+    }
+    if (address && addresses[currentAddress] == address) {
+      if (!addresses[++currentAddress]) {
+        currentAddress = 0;
+        if (addresses[currentAddress] == address) {
+          currentAddress++;
+        }
+      }
+    }
+    address = yield addresses[currentAddress];
+  }
+}
+
+function* createNewTransactions1(addresses, txCount = 0) {
+  let accounts = {};
+  addresses.forEach(address => accounts[address] = true);
+  console.log('accounts', accounts);
+  
+  let currentAddress = 0;
+  
+  function getAddress() {
+    if (addresses.length -1 <= ++currentAddress) {
+      currentAddress = 0;
+    }
+    return addresses[currentAddress];
+  }
+  
+  let count = 0;
+  while (count++ <= txCount) {
+    console.log('iter ', count);
+
+    let accountUtxos = {};
+    let utxos = yield getAllUxtos();
+    console.log('utxos ', utxos);
+
+    utxos = utxos.reduce((res, utxo) => {
+      let addr = utxo.address.toLowerCase();
+      if (addresses[addr]) {
+        res.push(utxo);
+      }
+      return res;
+    }, []);
+    
+    yield new Promise.race(utxos.map(uxto => {
+      // return createTx(uxto, uxto.address, getAddress());
+      let time = 100;
+      new Promise(function(resolve, reject) {
+          setTimeout(resolve, time++);
+      });
+    }))
+  }
+  
+}
+
+
+
+
+async function createTx(data, account, to, iter) {
   // let txData = [ data.blockNumber, data.txNumber, data.outputNumber, undefined, undefined, undefined, to, data.amount,undefined,undefined, undefined];
+  // console.log('from ', account)
+  // console.log('to   ', to)
+
+  if (!account || !to ) {
+    console.log('=====!=================================================================================!============ ')
+  }
   
   let txDataForRlp = [ 
     ethUtil.toBuffer(new BN(data.blockNumber)),
@@ -59,9 +214,16 @@ async function createTx(data, account, to) {
     ethUtil.toBuffer(new BN(data.outputNumber)),
     undefined, undefined, undefined, to.toLowerCase(), new BN(data.amount),undefined,undefined, undefined];
 
+    
+  // let txRlpEncoded = tx.getHash(true).toString('hex');
+  // 
+  // const signature = await web3.eth.sign(ethUtil.addHexPrefix(txRlpEncoded), config.plasmaOperatorAddress);
+    
   let txRlpEncoded = ethUtil.sha3(RLP.encode(txDataForRlp)).toString('hex');
-  const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(account.pkey, 'hex'));
-  let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
+  const signature = await web3.eth.sign(ethUtil.addHexPrefix(txRlpEncoded), account);
+  // let txRlpEncoded = ethUtil.sha3(RLP.encode(txDataForRlp)).toString('hex');
+  // const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(account.pkey, 'hex'));
+  // let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
 
   let signedTxData = {
     inputs: [{
@@ -73,11 +235,27 @@ async function createTx(data, account, to) {
       address: to,
       amount: data.amount
     }],
-    sign1: signatureRaw
+    sign1: signature
   }
   let tx = await createSignedTransaction(signedTxData);
-  await txPool.addTransaction(tx);
-  console.log('add tx--------------------------', to, ' tx ', data.txNumber, ' out ', data.outputNumber);
+  
+  // let address111 = tx.getAddressFromSignature(1);
+  // address111 = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
+  // console.log('address111', address111)
+  // console.log('address111', address111)
+  
+  if (tx) {
+    await txPool.addTransaction(tx);
+    console.log('createTx     ----------------------------------- ', iter);
+
+    statistic.created++;
+    return true;
+  }
+  statistic.notCreated++;
+
+  
+  
+  // console.log('add tx--------------------------', to, ' tx ', data.txNumber, ' out ', data.outputNumber);
 }
 
 

@@ -37,11 +37,13 @@ async function processDepositEvent(event){
   const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), depositBlockIndexBN);
 
   let txRlpEncoded = tx.getHash(true).toString('hex');
-  const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
-  let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
+  
+  const signature = await web3.eth.sign(ethUtil.addHexPrefix(txRlpEncoded), config.plasmaOperatorAddress);
+  // const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
+  // let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
 
-  tx.sig1 = signatureRaw;
-  tx.sig2 = signatureRaw;
+  tx.sig1 = signature;
+  tx.sig2 = signature;
 
   if (tx.validate()) {
       txPool.addTransaction(tx);

@@ -35,6 +35,8 @@ class TXPool {
     let isValid = await checkTransactionInputs(tx);
 
     if (!isValid) {
+      console.log('addTransaction invalid ==============================000======================================================================================',);
+
       return false;
     }
     
