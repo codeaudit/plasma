@@ -46,6 +46,8 @@ async function processDepositEvent(event){
   tx.sig2 = signature;
 
   if (tx.validate()) {
+    console.log('processDepositEvent ======---------------------------------------------------------------------------==');
+
       txPool.addTransaction(tx);
       logger.info('Create deposit transaction ', depositBlock);        
   }

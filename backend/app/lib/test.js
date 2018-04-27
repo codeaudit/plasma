@@ -17,6 +17,7 @@ const ethUtil = require('ethereumjs-util');
 import RLP from 'rlp';
 import txPool from 'lib/txPool';
 const BN = ethUtil.BN;
+import contractHandler from 'lib/contracts/plasma';
 
 // var accounts = {
 //   1: {address:'0x11A618DE3ADe9B85Cd811BF45af03bAd481842Ed', pkey: ''},
@@ -24,6 +25,53 @@ const BN = ethUtil.BN;
 // }
 
 let statistic = {}
+
+async function createDeposits(options = {}) {
+  let accounts = await web3.eth.getAccounts();
+  // accounts = accounts.map(address => address.toLowerCase());
+  console.log('accounts', accounts);
+  
+  for (let addr of accounts) {
+    await web3.eth.personal.unlockAccount(addr, config.plasmaOperatorPassword, 0);
+    console.log('unlockAccount', addr);
+  }
+  
+  let deposits = options.deposits || 5;
+  var nextAddressGen = getNextAddress(accounts);
+
+  let created = 0;
+  // await new Promise.all(new())
+  // let query = [];
+  for (let i = 0; i <= deposits; i++) {
+    try {
+      let address = nextAddressGen.next().value;
+      let amount = new BN('100000000000000000');
+      console.log('amount1', amount);
+      let add = new BN('1000000000000000');
+      console.log('add', add);
+      add = add.mul(new BN(i + 1));
+      console.log('add1', add);
+
+      amount = amount.add(add).toString();
+      console.log('amount', amount);
+      
+      contractHandler.contract.methods.deposit().estimateGas({from: address, value: amount})
+        .then(gas => {
+          console.log('gas', gas);
+          return contractHandler.contract.methods.deposit().send({from: address, gas, value: amount});
+        })
+      
+      // let gas = await contractHandler.contract.methods.deposit().estimateGas({from: address, value: amount});
+      // console.log('gas', gas);
+      // let res = await contractHandler.contract.methods.deposit().send({from: address, gas, value: amount});
+      created++;
+    }
+    catch (error){
+      console.log('Create deposit error', error);
+    }
+  }
+  return created;
+}
 
 async function startTest(options = {}) {
   statistic = {
@@ -40,7 +88,7 @@ async function startTest(options = {}) {
     console.log('unlockAccount', addr);
   }
   
-  let txCount = options.txCount || 1000;
+  let txCount = options.count || 0;
   let transactions = [];
   let deporits = [];
   let depositBlock = 1;
@@ -50,7 +98,7 @@ async function startTest(options = {}) {
 
   // let currentAcc = accounts[1];
   // for (let index = 0; index < 1000; index++) {
-  //   let uxtos = await getAllUxtos();
+  //   let uxtos = await getAllUtxos();
   //   let uxto1 = uxtos.find(u => u.address.toLowerCase() == accounts[1].address.toLowerCase());
   //   let uxto2 = uxtos.find(u => u.address.toLowerCase() == accounts[2].address.toLowerCase());
   // 
@@ -92,13 +140,21 @@ async function createNewTransactions(addresses, txCount) {
   // console.log('nextAddressGen ', nextAddressGen);
 
   
-  while (count++ <= txCount) {
-    console.log('iteration ----------------------------------- ', count);
+  while (count <= txCount) {
+    // console.log('iteration ---count-------------------------------- ', count);
     
     let accountUtxos = {};
-    let utxos = await getAllUxtos();
-    // console.log('utxos ', utxos);
+    // let utxos = await getAllUtxos();
+    let utxos = await txPool.getAllUxtos();
 
+    // console.log('utxos ----------------------------------- ', utxos);
+    
+    // console.log('utxos ', utxos);
+    if (txPool.poolLength > 0) {
+      // console.log('txPool -poolLength---------------------------------- ', txPool.poolLength );
+      await new Promise(resolve => setTimeout(resolve, 10));
+      continue;
+    }
     utxos = utxos.reduce((res, utxo) => {
       let addr = utxo.address.toLowerCase();
       if (accounts[addr]) {
@@ -106,10 +162,15 @@ async function createNewTransactions(addresses, txCount) {
       }
       return res;
     }, []);
+    count += utxos.length;
+    console.log('count ----------------------------------- ', count);
+
     // console.log('utxos1 ', utxos);
-    
+    // console.log('iteration ----count 1------------------------------- ', count);
+
 
     utxos.forEach((uxto, index) => {
+      console.log('iteration ----createTx 1------------------------------- ', index);
       return createTx(uxto, uxto.address, nextAddressGen.next(uxto.address).value, count);
     })
     
@@ -174,7 +235,7 @@ function* createNewTransactions1(addresses, txCount = 0) {
     console.log('iter ', count);
 
     let accountUtxos = {};
-    let utxos = yield getAllUxtos();
+    let utxos = yield getAllUtxos();
     console.log('utxos ', utxos);
 
     utxos = utxos.reduce((res, utxo) => {
@@ -238,19 +299,22 @@ async function createTx(data, account, to, iter) {
     sign1: signature
   }
   let tx = await createSignedTransaction(signedTxData);
-  
+
   // let address111 = tx.getAddressFromSignature(1);
   // address111 = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
   // console.log('address111', address111)
   // console.log('address111', address111)
   
   if (tx) {
-    await txPool.addTransaction(tx);
-    console.log('createTx     ----------------------------------- ', iter);
+    txPool.addTransaction(tx);
+
+    console.log('createTx     ----------------------------------- ');
 
     statistic.created++;
     return true;
   }
+  console.log('createSignedTransaction    not ----------------------------------- ');
+
   statistic.notCreated++;
 
   
@@ -259,7 +323,7 @@ async function createTx(data, account, to, iter) {
 }
 
 
-async function getAllUxtos(address) {
+async function getAllUtxos(address) {
   return await new Promise((resolve, reject) => {
     try { 
       const uxtos = [];    
@@ -303,4 +367,4 @@ async function getAllUxtos(address) {
   })
 }
 
-module.exports = { startTest };
+module.exports = { startTest, createDeposits };

@@ -5,6 +5,7 @@ import levelDB from 'lib/db';
 const BN = ethUtil.BN;
 import config from "../config";
 const { prefixes: { utxoPrefix }, plasmaOperatorAddress } = config;
+import txPool from 'lib/txPool';
 
 import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
 import { PlasmaTransaction } from 'lib/model/tx';
@@ -57,15 +58,23 @@ async function createSignedTransaction(data) {
   txData.sig2 = data.sign2;
 
   for (let input of data.inputs) {
-    let utxo = await getUTXO(input.blockNumber, input.txNumber, input.outputNumber);
+    let blockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(input.blockNumber)), blockNumberLength)
+    let txNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(input.txNumber)), txNumberLength)
+    let txOutputNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(input.outputNumber)), txOutputNumberLength)
+    let utxoKey = Buffer.concat([utxoPrefix, blockNumberBuffer, txNumberBuffer, txOutputNumberBuffer]);
+    
+    let utxo = await txPool.getUxtoFromPool(utxoKey);
+    // let utxo = await getUTXO(input.blockNumber, input.txNumber, input.outputNumber);
     if (!utxo) {
-      // console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+      console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
 
     txData[`blockNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.blockNumber));
     txData[`txNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.txNumber));
     txData[`outputNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.outputNumber));
+    // console.log('inputsTotalAmount===-----utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------', utxo)
+
     inputsTotalAmount = inputsTotalAmount.add(new BN(utxo.denom));
     inputIndex++;
   }
@@ -74,7 +83,7 @@ async function createSignedTransaction(data) {
     let denom = new BN(output.amount);
     let newowner = ethUtil.addHexPrefix(output.address.toLowerCase());
     if (denom.lte(0)) {
-      // console.log('createSignedTransaction===--------2-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+      console.log('createSignedTransaction===--------2-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
     
@@ -85,7 +94,9 @@ async function createSignedTransaction(data) {
   }
 
   if (!inputsTotalAmount.eq(outputsTotalAmount)) {
-    // console.log('createSignedTransaction===--------3-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+    console.log('createSignedTransaction===--------3-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+    console.log('inputsTotalAmount-----------------', inputsTotalAmount.toString());
+    console.log('outputsTotalAmount-----------------', outputsTotalAmount.toString());
 
     return null;
   }
@@ -162,5 +173,6 @@ async function checkTransactionInputs(transaction) {
 module.exports = {
   createDepositTransaction,
   createSignedTransaction,
-  checkTransactionInputs
+  checkTransactionInputs,
+  getUTXO
 };

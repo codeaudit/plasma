@@ -13,8 +13,8 @@ services:
       - "./data/ethernode/geth_ipc:/usr/src/geth_ipc:ro"
     environment:
       NODE_ENV: development
-      PRODUCTION_MODE: "OFF"
-      PLASMA_CONTRACT_ADDRESS: '0x06db0c461ef7e7d82b373c0c904c8c914f46dc51'
+      PRODUCTION_MODE: "OFF"    
+      PLASMA_CONTRACT_ADDRESS: '0x91fab8a3025af6b9d25da01040623eef421cffad'
       PLASMA_OPERATOR_ADDRESS: '0x4DC884abB17d11DE6102fC1ef2ceE0EbD31DF248'
       PLASMA_OPERATOR_PRIVATE: ''
       PLASMA_OPERATOR_PASSWORD: ''

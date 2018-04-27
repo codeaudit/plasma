@@ -15,6 +15,10 @@ function initFields(self, fields, data) {
     fields.forEach((field, i) => {
       self[field.name] = decodedData[i];
     });
+  } else if (Array.isArray(data) && data.length) {
+    fields.forEach((field, i) => {
+      self[field.name] = data[i];
+    });
   } else if (data && typeof data === 'object') {
     fields.forEach(field => {
       let value;
@@ -40,6 +44,14 @@ class TransactionOutput {
     data.address = '0x' + ethUtil.stripHexPrefix(this.newowner.toString('hex'));
     data.amount = new BN(this.denom).toString();
     return data;
+  }
+
+  getRlp() {
+    if (this._rlp) {
+      return this._rlp;
+    }
+    this._rlp = RLP.encode(outputFields.map(f => this[f.name]));
+    return this._rlp;
   }
 }
 
