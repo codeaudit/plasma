@@ -2,7 +2,7 @@
 
 import MerkleTools from 'merkle-tools';
 
-import { PlasmaTransaction } from 'lib/model/tx';
+import { PlasmaTransaction } from './tx';
 import RLP from 'rlp';
 import ethUtil from 'ethereumjs-util';
 
@@ -27,6 +27,8 @@ class Block {
       this.merkleRootHash = this.merkle.getMerkleRoot();
     }
   }
+
+  
 
   getRlp() {
     if (this._rlp) {

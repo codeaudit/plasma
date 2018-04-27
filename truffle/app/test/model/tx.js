@@ -1,11 +1,13 @@
 'use strict';
 
-import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
-
 import RLP from 'rlp';
 
 const ethUtil = require('ethereumjs-util');
+
 const BN = ethUtil.BN;
+const blockNumberLength = 4;
+const txNumberLength =4;
+const txOutputNumberLength= 1;
 
 const transactionFields = [
   { name: 'blockNumber1', default: '' },
@@ -36,8 +38,10 @@ function initFields(self, fields, data) {
       self[field.name] = data[i];
     });
   }  else if (data && typeof data === 'object') {
+
     fields.forEach(field => {
       let value;
+
       if (data && data[field.name]) {
         value = field.type == 'bn' ? new BN(data[field.name]) : data[field.name];
       } else {

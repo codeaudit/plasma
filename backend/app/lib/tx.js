@@ -26,11 +26,11 @@ async function getUTXO(blockNumber, txNumber, outputNumber) {
     return null;
   }
 }
-    
+
 function createDepositTransaction(addressTo, amountBN, depositBlockIndexBN) {
-  let empty = ethUtil.toBuffer(new BN(0));
+  let empty = '';
   let txData = {
-    blockNumber1: empty,
+    blockNumber1: depositBlockIndexBN,
     txNumber1: empty,
     outputNumber1: empty,
     blockNumber2: empty,

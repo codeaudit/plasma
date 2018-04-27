@@ -1,11 +1,32 @@
-const assert = require('assert');
-const Root = artifacts.require('./Root.sol');
-const Merkle = require("./merkle");
-const utils = require("./utils");
-const { Block, BlockHeader } = require("./block");
-const { Transaction } = require('./transaction');
-const u  = require('web3').utils;
-const RLP = require('rlp');
+import assert from "assert";
+const  Root = artifacts.require("./Root.sol");
+import ethUtil from 'ethereumjs-util';
+
+import { PlasmaTransaction } from "./model/tx"; 
+import  Block  from "./model/block";
+
+import { utils as u } from "web3";
+import RLP from "rlp";
+const BN = ethUtil.BN;
+
+function createDepositTransaction(addressTo, amountBN, depositBlockIndexBN) {
+    let empty = '';
+    let txData = {
+      blockNumber1: depositBlockIndexBN,
+      txNumber1: empty,
+      outputNumber1: empty,
+      blockNumber2: empty,
+      txNumber2: empty,
+      outputNumber2: empty,
+      newowner1: addressTo,
+      denom1: amountBN,
+      newowner2: 0,
+      denom2: empty
+    };
+    const tx = new PlasmaTransaction(txData);
+  
+    return tx;
+}
 
 const increaseTime = function(duration) {
   const id = Date.now()
@@ -62,17 +83,17 @@ contract('Test', function(accounts) {
     });
 
     it('should be correctly rlpencoded', async function() {
+
         const root = await Root.new();
         const accounts0 = '0x3ab059da310dc06c2c08993818cb5ffab48c8bb3';
         const null_address = '0x0000000000000000000000000000000000000000';
         const val = 100;
-        const tx = new Transaction('', '', '', 
-          '', '', '', accounts0, parseInt(val), null_address, '', '', '', '', 1);
+        const tx = new createDepositTransaction(accounts0, 100, 0);
 
-        var rlpencoded = tx.toString(false);
-        assert.equal(rlpencoded, 'f3808080808080943ab059da310dc06c2c08993818cb5ffab48c8bb3649400000000000000000000000000000000000000008080');
+        var rlpencoded = u.bytesToHex(tx.getRlp(true));
+        assert.equal(rlpencoded, '0xf3808080808080943ab059da310dc06c2c08993818cb5ffab48c8bb3649400000000000000000000000000000000000000008080');
         
-        const tx2 = await root.getTransactionFromRLP("0x" + rlpencoded);
+        const tx2 = await root.getTransactionFromRLP(rlpencoded);
         assert.equal(tx2[0].toNumber(), 0);
         assert.equal(tx2[1].toNumber(), 0);
         assert.equal(tx2[2].toNumber(), 0);
@@ -90,39 +111,33 @@ contract('Test', function(accounts) {
         const accounts0 = '0x9251d3a5c4b5402a335f57654ff2846ceeb92c27';
         const null_address = '0x0000000000000000000000000000000000000000';
         const val  = 100;
-        let tx = new Transaction(1, '', '', 
-        '', '', '', accounts0, parseInt(val), null_address, '', '', '', '', 1);
+        let tx = new createDepositTransaction(accounts0, 100, 1);
 
         const key = u.hexToBytes('0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6');
         tx.sign1(key);
+
         assert.equal(tx.sig1, '0x4e3d975d0fbb1c2b49084694ebaa645afa036ab6feff887348bc4d3cb6546acf49b87a3144c1113c66de63fbfbf0d6d8a1fcedbf5ecfc1450e2608165f8243981b');
         done();
     });
 
-    it('should return correct merkleHash', function(done) {
-        const accounts0 = '0x9251d3a5c4b5402a335f57654ff2846ceeb92c27';
-        const null_address = '0x0000000000000000000000000000000000000000';
-        const val  = 100;
-        let tx = new Transaction(1, '', '', 
-        '', '', '', accounts0, parseInt(val), null_address, '', '', '', '', 1);
-
-        const key = u.hexToBytes('0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6');
-        tx.sign1(key);
-        assert.equal(tx.merkleHash(), '0xdb70a539ce1cf04703782e4af010360ac4b4ea5c378c2ea991d7f14bda947b67');
-        done();
-    });
-
-    if('should return correct merkle root', function(done) {
+    it('should return correct merkle root', function(done) {
         const accounts0 = '0xadd8742ccb2e0762663ed666060b6a423bad154d';
         const null_address = '0x0000000000000000000000000000000000000000';
         const val  = 100;
-        let tx = new Transaction(1, '', '', 
-        '', '', '', accounts0, parseInt(val), null_address, '', '', '', '', 1);
-        const blkHeader = new BlockHeader(blknum, "rewr2dg5f", [ tx2.merkleHash() ] );
-        assert.equal(blkHeader.merkleRoot, '329a20cc45c4ad771579c4f6604d3b7bdec8752b84b8c3d8e58e86331facb7c7'); 
+
+        let tx = new createDepositTransaction(accounts0, 100, 1);
+
+        const blk = new Block({
+            blockNumber: 1,
+            transactions: [ tx ]
+        });
+
+        assert.equal(ethUtil.bufferToHex(blk.merkleRootHash), '0x15cbc5df29765a2c836228ca61ab05d28b5bb727b5de124ea687882e65d4c225'); 
+        done();
     })
 
     it ('should exit', async function() {
+
         const root = await Root.new();
         const val = 100;
         const null_address = '0x0000000000000000000000000000000000000000';
@@ -133,26 +148,32 @@ contract('Test', function(accounts) {
         await root.deposit({value: val, sender: accounts[0]});
         assert.equal(await root.getDepositBlock(), 2);
 
-        let tx = new Transaction('', '', '', 
-        '', '', '', accounts[0], parseInt(val), null_address, '', '', '', '', 1);
+        let tx = new createDepositTransaction(accounts[0], 100, '');
 
-        const txBytes2 = tx.toString(false);
+        const txBytes2 = tx.getRlp(true);
         tx.sign1(key);
 
-        const blkHeader = new BlockHeader(blknum, "rewr2dg5f", [ tx.merkleHash() ] );
-        let proof = "0x"+Buffer.concat(blkHeader.merkle.getProof(0)).toString('hex') ;
+        let blk = new Block({
+            blockNumber: blknum,
+            transactions: [ tx ]
+        });
 
+        let proof = "0x"+Buffer.concat(blk.merkle.getProof(0, true)).toString('hex') ;
+        if (proof=="0x") {
+            proof = "0x0";
+        }
         const currentBlock = await root.getCurrentBlock();
         assert.equal(currentBlock.toNumber(), 1000);
 
-        const res = await root.submitBlock("0x"+blkHeader.merkleRoot);
+        const res = await root.submitBlock(ethUtil.bufferToHex( blk.merkleRootHash) );
         const event3 = res.logs.find(e => e.event === 'BlockSubmitted');
         assert.ok(event3, "event BlockSubmitted should exists");
 
         const confirmSig1 = tx.confirm( (await root.getChain(1000))[0], key );
-        const sigs = u.bytesToHex( u.hexToBytes(tx.sig1).concat( u.hexToBytes(tx.sig2), u.hexToBytes(confirmSig1)  ));
 
-        const {logs} = await root.startExit(currentBlock.toNumber(), 0, 0, "0x" + txBytes2, proof, sigs );
+        const sigs = u.bytesToHex( u.hexToBytes(tx.sig1).concat( u.hexToBytes('0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'), u.hexToBytes(confirmSig1)  ));
+
+        const {logs} = await root.startExit(currentBlock.toNumber(), 0, 0, ethUtil.bufferToHex(txBytes2), proof, sigs );
         const event = logs.find(e => e.event === 'Exit');
         assert.ok(event, "event Exit should exists");
         const priority = 1000 * 1000000000 + 10000 * 0 + 0;
@@ -170,23 +191,34 @@ contract('Test', function(accounts) {
         const utxo_pos1 = dblknum * 1000000000 + 1;
         await root.deposit({value: val});
 
-        let tx = new Transaction('', '', '', '', '', '', accounts[0], parseInt(val), null_address, '', '', '', '', 1);
-        const txBytes2 = tx.toString(false);      
+        let tx = new createDepositTransaction(accounts[0], 100, '');
+
+        //let tx = new Transaction('', '', '', '', '', '', accounts[0], parseInt(val), null_address, '', '', '', '', 1);
+        const txBytes2 = tx.getRlp(true);    
         tx.sign1(key);
 
         const {logs} = await root.startDepositExit(utxo_pos1, val)
         const event = logs.find(e => e.event === 'Exit');
         assert.ok(event, "event Exit should exists");
 
-        const tx2  = new Transaction(dblknum, '', '', '', '', '', accounts[0], parseInt(val), null_address, '', '', '', '', 2);
+        const tx2 = new createDepositTransaction(accounts[0], 100, dblknum);
         tx2.sign1(key)
-        const tx_bytes2  = tx2.toString(false)
+        const tx_bytes2  = tx2.getRlp(true);  
         let blknum = (await root.getCurrentBlock()).toNumber();
-        const blkHeader = new BlockHeader(blknum, "rewr2dg5f", [ tx2.merkleHash() ] );
-        const proof = "0x"+Buffer.concat(blkHeader.merkle.getProof(0)).toString('hex');
+
+        let blk = new Block({
+            blockNumber: blknum,
+            transactions: [ tx2 ]
+        });
+        
+        let proof = "0x" + Buffer.concat(blk.merkle.getProof(0)).toString('hex');
+        if (proof=="0x") {
+            proof = "0x0";
+        }
 
         blknum = (await root.getCurrentBlock()).toNumber();
-        const res3 = await root.submitBlock("0x"+(blkHeader.merkleRoot));
+        const res3 = await root.submitBlock(ethUtil.bufferToHex(blk.merkleRootHash));
+
         const event3 = res3.logs.find(e => e.event === 'BlockSubmitted');
         assert.ok(event3, "event BlockSubmitted should exists");
         const confirmSig = tx2.confirm( (await root.getChain(blknum))[0], key );
@@ -196,7 +228,8 @@ contract('Test', function(accounts) {
         const exit = await root.getExit(utxo_pos1);
         assert.equal(exit[0], accounts[0]);
         assert.equal(exit[1].toNumber(), 100);
-        const res = await root.challengeExit(utxo_pos1, blknum, "0x"+tx_bytes2, proof, sigs, confirmSig)
+        
+        const res = await root.challengeExit(utxo_pos1, blknum, ethUtil.bufferToHex(tx_bytes2), proof, sigs, confirmSig)
         
         const event2 = res.logs.find(e => e.event === 'ExitChallengedEvent');
         assert.ok(event2, "event ExitChallengedEvent should exists");
@@ -209,7 +242,7 @@ contract('Test', function(accounts) {
         const val = 100;
         const null_address = '0x0000000000000000000000000000000000000000';
 
-        const tx = new Transaction('', '', '', '', '', '', accounts[0], parseInt(val), null_address, '', '', '', '', 1);
+        const tx = new createDepositTransaction(accounts[0], 100, '');
         
         const dep1_blknum = (await root.getDepositBlock()).toNumber();
         await root.deposit({value: val});
