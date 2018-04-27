@@ -47,13 +47,9 @@ router.route('/createTestTransactions')
   .post(function(req, res, next) {
     try { 
       let data = req.body;
-      console.log('data', data);
-
       let count = data.count || null;
-      console.log('count', count);
-      startTest({count});
-      
-      return res.json({count});
+      startTest({ count });
+      return res.json({ count });
     }
     catch(error){
       next(error);
@@ -64,13 +60,10 @@ router.route('/createTestDeposits')
   .post(function(req, res, next) {
     try { 
       let data = req.body;
-      console.log('data', data);
-
       let count = data.count || null;
-      console.log('count', count);
-      let ctreated = createDeposits({deposits: count});
-      
-      return res.json({ ctreated });
+      // let ctreated = await createDeposits({deposits: count});
+      return createDeposits({deposits: count})
+        .then(ctreated => res.json({ ctreated }))
     }
     catch(error){
       next(error);

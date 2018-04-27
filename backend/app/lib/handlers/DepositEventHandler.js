@@ -39,17 +39,13 @@ async function processDepositEvent(event){
   let txRlpEncoded = tx.getHash(true).toString('hex');
   
   const signature = await web3.eth.sign(ethUtil.addHexPrefix(txRlpEncoded), config.plasmaOperatorAddress);
-  // const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
-  // let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
 
   tx.sig1 = signature;
   tx.sig2 = signature;
 
   if (tx.validate()) {
-    console.log('processDepositEvent ======---------------------------------------------------------------------------==');
-
-      txPool.addTransaction(tx);
-      logger.info('Create deposit transaction ', depositBlock);        
+    txPool.addTransaction(tx);
+    logger.info('Create deposit transaction ', depositBlock);        
   }
   else {
     logger.error('Deposit TX error ');        

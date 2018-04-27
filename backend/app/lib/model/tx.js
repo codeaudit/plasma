@@ -146,7 +146,6 @@ class PlasmaTransaction {
   }
 
   getAddressFromSignature(index, hex) {
-    // let txRlpEncoded = ethUtil.sha3(this.getRlp(true)).toString('hex');
     let txRlpEncoded = ethUtil.sha3(this.getRlp(true));
     let txRlpHashed =  ethUtil.hashPersonalMessage(txRlpEncoded);
     if (this[`sig${index}`]) {

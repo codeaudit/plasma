@@ -64,17 +64,14 @@ async function createSignedTransaction(data) {
     let utxoKey = Buffer.concat([utxoPrefix, blockNumberBuffer, txNumberBuffer, txOutputNumberBuffer]);
     
     let utxo = await txPool.getUxtoFromPool(utxoKey);
-    // let utxo = await getUTXO(input.blockNumber, input.txNumber, input.outputNumber);
     if (!utxo) {
-      // console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+      console.log('createSignedTransaction==========!utxo------------------', utxoKey.toString('hex'));
       return false;
     }
 
     txData[`blockNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.blockNumber));
     txData[`txNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.txNumber));
     txData[`outputNumber${inputIndex + 1}`] = ethUtil.toBuffer(new BN(input.outputNumber));
-    // console.log('inputsTotalAmount===-----utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------', utxo)
-
     inputsTotalAmount = inputsTotalAmount.add(new BN(utxo.denom));
     inputIndex++;
   }
@@ -83,7 +80,6 @@ async function createSignedTransaction(data) {
     let denom = new BN(output.amount);
     let newowner = ethUtil.addHexPrefix(output.address.toLowerCase());
     if (denom.lte(0)) {
-      console.log('createSignedTransaction===--------2-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
     
@@ -94,10 +90,6 @@ async function createSignedTransaction(data) {
   }
 
   if (!inputsTotalAmount.eq(outputsTotalAmount)) {
-    console.log('createSignedTransaction===--------3-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
-    console.log('inputsTotalAmount-----------------', inputsTotalAmount.toString());
-    console.log('outputsTotalAmount-----------------', outputsTotalAmount.toString());
-
     return null;
   }
 
@@ -109,12 +101,8 @@ async function checkTransactionInputs(transaction) {
   try {
     let txInputKeys = transaction.getInputKeys();
     if (txInputKeys.join('') == depositInputKey + depositInputKey) {
-      // console.log('checkTransactionInputs  1----------------  ',);
-
       let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
       let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
-      // console.log('address                  ', address1);
-      // console.log('plasmaOperatorAddress    ', plasmaOperatorAddress.toLowerCase());
       return address1 == address2 && plasmaOperatorAddress.toLowerCase() == address1;
     }
     
@@ -133,13 +121,8 @@ async function checkTransactionInputs(transaction) {
 
         let address = transaction.getAddressFromSignature(inputIndex);
         address = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
-        let newowner = ethUtil.addHexPrefix(utxo.newowner.toString('hex').toLowerCase());
-        // console.log('address     ', address);
-        // console.log('newowner    ', newowner);
-        
+        let newowner = ethUtil.addHexPrefix(utxo.newowner.toString('hex').toLowerCase());      
         if (address != newowner) {
-          console.log('checkTransactionInputs  2----------------  ',);
-
           return false;
         }
         inputsTotalAmount = inputsTotalAmount.add(new BN(utxo.denom));
@@ -148,24 +131,18 @@ async function checkTransactionInputs(transaction) {
     
     for (let outputIndex of [1, 2]) {
       let output = transaction.getTransactionOutput(outputIndex);
-
       if (output) {
         outputsTotalAmount = outputsTotalAmount.add(new BN(output[1]));
       }
     }
 
     if (!inputsTotalAmount.eq(outputsTotalAmount)) {
-      console.log('checkTransactionInputs   3----------------  ',);
-
       return false;
     }
     
     return true;
   }
   catch (error) {
-    // console.log('checkTransactionInputs   error  ', error);
-    // console.log('checkTransactionInputs   transaction  ', transaction);
-
     return false;
   }
 }
