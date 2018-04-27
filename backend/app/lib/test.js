@@ -138,15 +138,16 @@ async function createNewTransactions(addresses, txCount) {
   var nextAddressGen = getNextAddress(addresses);
 
   // console.log('nextAddressGen ', nextAddressGen);
-
+  let totalDb = 0;
   
   while (count <= txCount) {
     // console.log('iteration ---count-------------------------------- ', count);
     
     let accountUtxos = {};
     // let utxos = await getAllUtxos();
+    let start1 = Date.now();
     let utxos = await txPool.getAllUxtos();
-
+    totalDb += Date.now() - start1;
     // console.log('utxos ----------------------------------- ', utxos);
     
     // console.log('utxos ', utxos);
@@ -163,17 +164,18 @@ async function createNewTransactions(addresses, txCount) {
       return res;
     }, []);
     count += utxos.length;
-    console.log('count ----------------------------------- ', count);
+    // console.log('count ----------------------------------- ', count);
 
     // console.log('utxos1 ', utxos);
     // console.log('iteration ----count 1------------------------------- ', count);
 
 
     utxos.forEach((uxto, index) => {
-      console.log('iteration ----createTx 1------------------------------- ', index);
+      // console.log('iteration ----createTx 1------------------------------- ', index);
       return createTx(uxto, uxto.address, nextAddressGen.next(uxto.address).value, count);
     })
-    
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     // await new Promise.race(utxos.map(uxto => {
     // 
     //   // console.log('utxos ', getNextAddress.next(uxto.address).value);
@@ -193,7 +195,7 @@ async function createNewTransactions(addresses, txCount) {
     //   // });
     // }))
   }
-  
+  console.log('totalDb=====================================================================' , totalDb);
 }
 
 function* getNextAddress(addresses) {
@@ -308,12 +310,12 @@ async function createTx(data, account, to, iter) {
   if (tx) {
     txPool.addTransaction(tx);
 
-    console.log('createTx     ----------------------------------- ');
+    // console.log('createTx     ----------------------------------- ');
 
     statistic.created++;
     return true;
   }
-  console.log('createSignedTransaction    not ----------------------------------- ');
+  // console.log('createSignedTransaction    not ----------------------------------- ');
 
   statistic.notCreated++;
 

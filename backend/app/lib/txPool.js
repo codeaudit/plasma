@@ -44,33 +44,33 @@ class TXPool {
   ///
   async addTransaction(tx) {
     this.txPool.push(tx);
-    console.log('addTransaction');
-    console.log('this.processing', this.processing);
+    // console.log('addTransaction');
+    // console.log('this.processing', this.processing);
 
     if (!this.processing) {
-      console.log('this. start processing');
+      // console.log('this. start processing');
       this.processTransactions_1();
     }
   }
   
   async processTransactions_1() {
-    console.log('tprocessTransactions_1 ');
+    // console.log('tprocessTransactions_1 ');
     try {
       this.processing = true;
-      console.log('tprocessTransactions_1        1 ');
+      // console.log('tprocessTransactions_1        1 ');
 
       if (!this.newBlockNumber || !this.newBlockNumberBuffer) {
         await this.getLastBlockNumberFromDb();
       }
       
       while (this.txPool.length) {
-        console.log('this.txPool.length ', this.txPool.length);
+        // console.log('this.txPool.length ', this.txPool.length);
 
         let tx = this.txPool.shift();
         let inputsData = await this.checkTxInputs(tx);
         
         if (inputsData) {
-          console.log('addTransaction inputsData =========================  ok    ==================================================', );
+          // console.log('addTransaction inputsData =========================  ok    ==================================================', );
           // this.updateUxtos(inputsData);
           this.updateUxtos(inputsData, ++this.currentTransactionNumberInBlock);
 
@@ -100,32 +100,45 @@ class TXPool {
     let inputsData = await this.checkTxInputs(tx);
 
     if (inputsData) {
-      console.log('addTransaction inputsData =========================  ok    ==================================================', );
+      // console.log('addTransaction inputsData =========================  ok    ==================================================', );
       // this.updateUxtos(inputsData);
       this.updateUxtos(inputsData, ++this.currentTransactionNumberInBlock);
 
       // await this.updateTransactionUxtos(tx, ++this.currentTransactionNumberInBlock);
-      console.log('this.utxos              : ', this.utxos);
-      console.log('this.spendedUtxosFromDb : ', this.spendedUtxosFromDb);
+      // console.log('this.utxos              : ', this.utxos);
+      // console.log('this.spendedUtxosFromDb : ', this.spendedUtxosFromDb);
+      // console.log('transactions push  txNumber1--------------------------------------', tx.txNumber1);
 
       this.transactions.push(tx);
       return true;;
     }
-    console.log('addTransaction !inputsData =============================000000000000000000=========================================================================', );
+    // console.log('addTransaction !inputsData =============================000000000000000000=========================================================================', );
 
 
     return false;
   }
   
   updateUxtos(inputsData, transactionNumberInBlock) {
+    // console.log('updateUxtos77777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777')
+    // console.log('utxos --------------------------------------', this.utxos);
+
+    //
+    let inputCount = 0;
+    let outputCount = 0;
+    //
     let { transactionInputs = [], transactionOutputs = []} = inputsData;
     if (Array.isArray(transactionInputs)) {
       transactionInputs.forEach(input => {
         if (input && input.utxo) {
+          // console.log('input --------------------------------------', input);
+          // console.log('input --key------------------------------------', input.utxoKey.toString('hex'));
+
           if (input.fromDatabase) {
             this.spendedUtxosFromDb[input.utxoKey.toString('hex')] = true;
+            inputCount++;
           } else {
             delete this.utxos[input.utxoKey.toString('hex')];
+            inputCount++;
           }
         }
       })
@@ -137,32 +150,50 @@ class TXPool {
         if (output && output.output) {
           let outputNumberInTxBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(index + 1)), txOutputNumberLength)
           let utxoKey = Buffer.concat([utxoPrefix, this.newBlockNumberBuffer, txIndexInBlockBuffer, outputNumberInTxBuffer]);
-          console.log('utxoKey  1----------------  ', utxoKey);
+          // console.log('utxoKey  1----------------  ', utxoKey);
+          // 
+          // console.log('newBlockNumberBuffer  1----------------  ', new BN(this.newBlockNumberBuffer).toString());
+          // console.log('txIndexInBlockBuffer  1----------------  ', new BN(txIndexInBlockBuffer).toString());
+          // console.log('outputNumberInTxBuffer  1----------------  ', new BN(outputNumberInTxBuffer).toString());
+          // console.log('transactionOutputs  output----------------  ', 'i: ', index, '  ' , output);
+          // console.log('output --key------------------------------------', utxoKey.toString('hex'));
 
-          console.log('newBlockNumberBuffer  1----------------  ', new BN(this.newBlockNumberBuffer).toString());
-          console.log('txIndexInBlockBuffer  1----------------  ', new BN(txIndexInBlockBuffer).toString());
-          console.log('outputNumberInTxBuffer  1----------------  ', new BN(outputNumberInTxBuffer).toString());
-          console.log('utxoKey  output----------------  ', output);
-
-          this.utxos[utxoKey.toString('hex')] = output;
+          this.utxos[utxoKey.toString('hex')] = output.output;
+          outputCount++
         }
       })
     }
+    
+    if (inputCount != outputCount) {
+      // console.log('=============================================================inputCount===============================', inputCount);
+      // console.log(inputsData);
+      // 
+      // console.log('=============================================================outputCount==============================', outputCount);
+    }
+    
+    if (Object.keys(this.utxos).length > 1) {
+      // console.log('utxos length  --------------------------------------', this.utxos);
+      // console.log(inputsData);
+
+    }
+    // console.log('utxos --------------------------------------', this.utxos);
+    // 
+    // console.log('updateUxtos77777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777')
   }
 
   async checkTxInputs(transaction) {
     try {
       let txInputKeys = transaction.getInputKeys();
       if (txInputKeys.join('') == depositInputKey + depositInputKey) {
-        console.log('checkTransactionInputs  1----------------  ',);
+        // console.log('checkTransactionInputs  1----------------  ',);
         let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
         let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
-        console.log('address                  ', address1);
-        console.log('plasmaOperatorAddress    ', config.plasmaOperatorAddress.toLowerCase());
+        // console.log('address                  ', address1);
+        // console.log('plasmaOperatorAddress    ', config.plasmaOperatorAddress.toLowerCase());
         
         let valid = address1 == address2 && config.plasmaOperatorAddress.toLowerCase() == address1;
         if (!valid) {
-          console.log('checkTxInputs  1--------------------------------------------------  ',);
+          // console.log('checkTxInputs  1--------------------------------------------------  ',);
 
           return false;
         }
@@ -172,7 +203,7 @@ class TXPool {
           let output = transaction.getTransactionOutput(outputIndex);
           if (output) {        
             output =  new TransactionOutput(output);
-            console.log('output   12----------------  ', output);
+            // console.log('output   deposit----------------  ', output);
             transactionOutputs.push({ output });
           }
         }   
@@ -189,37 +220,37 @@ class TXPool {
       for (let inputIndex of [1, 2]) {
         let input = transaction.getTransactionInput(inputIndex);
         if (input) {
-          console.log('getTransactionInput  1----------------  ', input);
+          // console.log('getTransactionInput  1----------------  ', input);
 
           let blockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(input[0]), blockNumberLength)
           let txNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(input[1]), txNumberLength)
           let txOutputNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(input[2]), txOutputNumberLength)
-          console.log('utxoKey blockNumberBuffer----------------  ', blockNumberBuffer);
-          console.log('utxoKey txNumberBuffer----------------  ', txNumberBuffer);
-          console.log('utxoKey txOutputNumberBuffer----------------  ', txOutputNumberBuffer);
+          // console.log('utxoKey blockNumberBuffer----------------  ', blockNumberBuffer);
+          // console.log('utxoKey txNumberBuffer----------------  ', txNumberBuffer);
+          // console.log('utxoKey txOutputNumberBuffer----------------  ', txOutputNumberBuffer);
 
           let utxoKey = Buffer.concat([utxoPrefix, blockNumberBuffer, txNumberBuffer, txOutputNumberBuffer]);
-          console.log('utxoKey  1----------------  ', utxoKey);
-          console.log('utxoKey  1-111111111---------------  ', utxoKey.toString('hex'));
-          console.log('this.utxos  1----------------  ', this.utxos);
+          // console.log('utxoKey  1----------------  ', utxoKey);
+          // console.log('utxoKey  1-111111111---------------  ', utxoKey.toString('hex'));
+          // console.log('this.utxos  1----------------  ', this.utxos);
 
           let utxo = this.utxos[utxoKey.toString('hex')];
           if (!utxo) {
             if (!this.spendedUtxosFromDb[utxoKey.toString('hex')]) {
-              console.log('getUTXOByKey !utxoKey======================================================================', utxoKey);
+              // console.log('getUTXOByKey !utxoKey======================================================================', utxoKey);
               utxo = await this.getUTXOByKey(utxoKey);
             }
             if (!utxo) {
-              console.log('checkTxInputs  !utxo  ',);
+              // console.log('checkTxInputs  !utxo  ',);
               return false;
             }
             transactionInputs.push({ utxo, utxoKey, fromDatabase: true });
           } else {
-            transactionInputs.push({ utxo, utxoKey });
-            utxo = new TransactionOutput(utxo.output);
+            transactionInputs.push({ utxo: utxo, utxoKey });
+            // utxo = new TransactionOutput(utxo.output);
           } 
           
-          console.log('getUTXOByKey------------------------- ', utxo);
+          // console.log('getUTXOByKey------------------------- ', utxo);
 
           let address = transaction.getAddressFromSignature(inputIndex);
           address = ethUtil.addHexPrefix(address.toString('hex').toLowerCase());
@@ -228,7 +259,7 @@ class TXPool {
           // console.log('newowner    ', newowner);
           
           if (address != newowner) {
-            console.log('checkTransactionInputs  2----------------  ',);
+            // console.log('checkTransactionInputs  2----------------  ',);
 
             return false;
           }
@@ -238,22 +269,22 @@ class TXPool {
       
       for (let outputIndex of [1, 2]) {
         let output = transaction.getTransactionOutput(outputIndex);
-        console.log('output   2----------------  ', output);
+        // console.log('output   2----------------  ', output);
 
         // output =  new TransactionOutput(output);
 
         if (output && output[1]) {
           output = new TransactionOutput(output);
-          console.log('output   3----------------  ', output);
+          // console.log('output   3----------------  ', output);
           outputsTotalAmount = outputsTotalAmount.add(output.denom);
           transactionOutputs.push({ output });
         }
       }      
 
       if (!inputsTotalAmount.eq(outputsTotalAmount)) {
-        console.log('checkTransactionInputs   3----------------  ',);
-        console.log('inputsTotalAmount-------------==----', inputsTotalAmount.toString());
-        console.log('outputsTotalAmount----------==-------', outputsTotalAmount.toString());
+        // console.log('checkTransactionInputs   3----------------  ',);
+        // console.log('inputsTotalAmount-------------==----', inputsTotalAmount.toString());
+        // console.log('outputsTotalAmount----------==-------', outputsTotalAmount.toString());
         return false;
       }
       
@@ -272,7 +303,7 @@ class TXPool {
       return new TransactionOutput(data);
     }
     catch(err) {
-      console.log('getUTXOByKey !er=======================================================================', err);
+      // console.log('getUTXOByKey !er=======================================================================', err);
       return null;
     }
   }
@@ -395,6 +426,7 @@ class TXPool {
       let transactions;
       
       if (this.transactions.length == 0) {
+        console.log('createNewBlock-   length == 0 ----',)
         return false;
       }
       if (this.transactions.length > 2**16){
@@ -420,19 +452,23 @@ class TXPool {
         { type: 'put', key: Buffer.concat([blockPrefix, block.blockNumber]), value: block.getRlp() }
       ];
       
-      Object.keys(this.utxos).forEach(uxtoKey => {
-        let output = this.utxos[uxtoKey].output;
-        console.log('New block uxtoKey: --------', uxtoKey);
-        console.log('New block uxtoKey: --------', Buffer.from(uxtoKey, 'hex'));
+      // console.log('save  block uxtoKey: --------', this.utxos);
 
-        console.log('New block output: ---------', output);
+      Object.keys(this.utxos).forEach(uxtoKey => {
+        let output = this.utxos[uxtoKey];
+        // console.log('New block uxtoKey: --------', uxtoKey);
+        // console.log('New block uxtoKey: --------', Buffer.from(uxtoKey, 'hex'));
+        // 
+        // console.log('New block output: ---------', output);
         let outputRlp = output.getRlp();
         queryAll.push({ type: 'put', key: Buffer.from(uxtoKey, 'hex'), value: outputRlp });
+        delete this.utxos[uxtoKey];
       })
       Object.keys(this.spendedUtxosFromDb).forEach(uxtoKeyToDelete => {
-        queryAll.push({ type: 'del', key: uxtoKeyToDelete });
+        queryAll.push({ type: 'del', key: Buffer.from(uxtoKeyToDelete, 'hex') });
+        delete this.spendedUtxosFromDb[uxtoKeyToDelete];
       })
-      console.log('New block queryAll: ', queryAll);
+      // console.log('New block queryAll: ', queryAll);
 
       await levelDB.batch(queryAll);
       
@@ -561,12 +597,12 @@ class TXPool {
       // console.log('output------11-----------', output)
 
       let outputKeyBuffer = Buffer.from(outputKey, 'hex');
-      if (!output && output.output) {
+      if (!output) {
         return;
       }
-      // console.log('output.output-----------------', output.output)
+      // console.log('output----------------------', output)
 
-      let outputJson = output.output.getJson();
+      let outputJson = output.getJson();
       // console.log('outputJson-----------------', outputJson)
 
       outputJson.blockNumber = ethUtil.bufferToInt(outputKeyBuffer.slice(blockStart, txStart));
@@ -581,7 +617,7 @@ class TXPool {
   
   async getUxtoFromPool(utxoKey) {
     try {
-      console.log('utxoKey  1----------------  ', utxoKey);
+      // console.log('utxoKey  1----------------  ', utxoKey);
 
       let utxo = this.utxos[utxoKey.toString('hex')];
       if (!utxo) {
@@ -594,9 +630,13 @@ class TXPool {
         return new TransactionOutput(utxo);
       }
       
-      return utxo.output;
+      // console.log('getUxtoFromPool----------------  ', utxo);
+
+      return utxo;
     }
     catch(err) {
+      // console.log('getUxtoFromPool-- err--------------  ', err);
+
       return null;
     }
   }

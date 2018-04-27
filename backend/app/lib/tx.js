@@ -66,7 +66,7 @@ async function createSignedTransaction(data) {
     let utxo = await txPool.getUxtoFromPool(utxoKey);
     // let utxo = await getUTXO(input.blockNumber, input.txNumber, input.outputNumber);
     if (!utxo) {
-      console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
+      // console.log('createSignedTransaction===--------!utxo-----------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++--------------------')
       return false;
     }
 
@@ -109,12 +109,12 @@ async function checkTransactionInputs(transaction) {
   try {
     let txInputKeys = transaction.getInputKeys();
     if (txInputKeys.join('') == depositInputKey + depositInputKey) {
-      console.log('checkTransactionInputs  1----------------  ',);
+      // console.log('checkTransactionInputs  1----------------  ',);
 
       let address1 = transaction.getAddressFromSignature(1, true).toLowerCase();
       let address2 = transaction.getAddressFromSignature(2, true).toLowerCase();
-      console.log('address                  ', address1);
-      console.log('plasmaOperatorAddress    ', plasmaOperatorAddress.toLowerCase());
+      // console.log('address                  ', address1);
+      // console.log('plasmaOperatorAddress    ', plasmaOperatorAddress.toLowerCase());
       return address1 == address2 && plasmaOperatorAddress.toLowerCase() == address1;
     }
     
@@ -163,8 +163,8 @@ async function checkTransactionInputs(transaction) {
     return true;
   }
   catch (error) {
-    console.log('checkTransactionInputs   error  ', error);
-    console.log('checkTransactionInputs   transaction  ', transaction);
+    // console.log('checkTransactionInputs   error  ', error);
+    // console.log('checkTransactionInputs   transaction  ', transaction);
 
     return false;
   }
