@@ -3,45 +3,10 @@
   "additionalProperties": false,
   "properties":
   {
-    "inputs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "blockNumber": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "txNumber": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "outputNumber": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
-      }
-    },
-    "outputs": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "address": {
-            "type": "string",
-            "minLength": 40, 
-            "maxLength": 42
-          },
-          "amount": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
-    },
-    "sign1" : {"type" : "string", "minLength" :130, "maxLength" : 132},
-    "sign2" : {"type" : "string", "minLength" :130, "maxLength" : 132}
+    "prev_block" : { "type" : "integer", "minimum": 1 },
+    "token_id" : { "type" : "string", "minLength": 64, "maxLength": 66 },
+    "new_owner" : { "type" : "string", "minLength": 40, "maxLength": 42 },
+    "signature" : {"type" : "string", "minLength" :130, "maxLength" : 132}
   },
-  "required": ["inputs", "sign1"]
+  "required": ["prev_block", "token_id", "new_owner", "signature"]
 }

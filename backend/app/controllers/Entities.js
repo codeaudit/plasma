@@ -47,8 +47,8 @@ router.route('/deposit')
   .get(async function(req, res, next) {
     try { 
       const deposits = [];
-      const start = Buffer.concat([config.prefixes.depositIndexPrefix, Buffer.alloc(1)]);
-      const end = Buffer.concat([config.prefixes.depositIndexPrefix, Buffer.from("ff".repeat(1), 'hex')]);
+      const start = Buffer.concat([config.prefixes.tokenIdPrefix, Buffer.alloc(1)]);
+      const end = Buffer.concat([config.prefixes.tokenIdPrefix, Buffer.from("ff".repeat(1), 'hex')]);
 
       levelDB.createReadStream({gte: start, lte: end})
         .on('data', function (data) {

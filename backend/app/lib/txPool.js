@@ -9,10 +9,11 @@ const BN = ethUtil.BN;
 import levelDB from 'lib/db';
 import { logger } from 'lib/logger';
 import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
-import { checkTransactionInputs } from 'lib/tx';
+import { getUTXO } from 'lib/tx';
 const { prefixes: { blockPrefix, transactionPrefix, utxoPrefix, lastBlockSubmittedToParentPrefix } } = config;
 
-const depositInputKey = new Buffer(blockNumberLength + txNumberLength + txOutputNumberLength).toString('hex');
+const depositInputKey = new Buffer(blockNumberLength + txNumberLength + txOutputNumberLength).toString('hex');/////
+const depositPreviousBlockBn = new BN(0);
 
 class TXPool {
   constructor () {
@@ -20,7 +21,6 @@ class TXPool {
     this.newBlockNumber;
     this.newBlockNumberBuffer;
     this.inputKeys = {};
-    this.currentTransactionNumberInBlock = 0;
   }
 
   get length() {
@@ -32,45 +32,51 @@ class TXPool {
       await this.getLastBlockNumberFromDb();
     }
 
-    let isValid = await checkTransactionInputs(tx);
+    let isValid = await checkTransaction(tx);
 
     if (!isValid) {
       return false;
     }
     
-    await this.updateTransactionUxtos(tx, ++this.currentTransactionNumberInBlock);
+    // await this.updateUtxos(tx, ++this.currentTransactionNumberInBlock);
     this.transactions.push(tx);
     return true;
   }
   
-  async updateTransactionUxtos(tx, transactionNumberInBlock) {
-    let queryAll = [];
+  
+  async checkTransaction(transaction) {
+    try {
+      let address = ethUtil.addHexPrefix(transaction.getAddressFromSignature('hex').toLowerCase());    
+      
+      if (new BN(transaction.prev_block).eq(depositPreviousBlockBn)) {
+        let valid = address == config.plasmaOperatorAddress.toLowerCase();
+        if (!valid) {
+          return false;
+        }
+      } else {
+        let newowner = ethUtil.addHexPrefix(transaction.new_owner.toString('hex').toLowerCase());
+        if (address != newowner) {
+          return false;
+        }
+        
+        let utxo = await getUTXO(transaction.prev_block, token_id);
+        if (!utxo) {
+          return false;
+        }
+        let utxoOwnerAddress = ethUtil.addHexPrefix(utxo.new_owner.toString('hex').toLowerCase());
 
-    let txIndexInBlockBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(this.currentTransactionNumberInBlock)), txNumberLength);
-    for (let inputIndex of [1, 2]) {
-      let input = tx.getTransactionInput(inputIndex);
-      if (!!input) {
-        let keyUTXO = Buffer.concat([utxoPrefix, 
-          ethUtil.setLengthLeft(ethUtil.toBuffer(input[0]), blockNumberLength),
-          ethUtil.setLengthLeft(ethUtil.toBuffer(input[1]), txNumberLength),
-          ethUtil.setLengthLeft(ethUtil.toBuffer(input[2]), txOutputNumberLength)
-        ]);
-        queryAll.push({ type: 'del', key: keyUTXO });
+        if (utxoOwnerAddress != newowner) { //check utxo previous owner
+          return false;
+        }
+        transaction.prev_hash = utxo.getHash();
       }
+        
+      return true;
     }
-    let currentOutputIndex = 1;
-    for (let outputIndex of [1, 2]) {
-      let outputRlp = tx.getTransactionOutputRlp(outputIndex);
-      if (outputRlp) {
-        let outputNumberInTxBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(currentOutputIndex)),txOutputNumberLength)
-        let keyUTXO = Buffer.concat([utxoPrefix, this.newBlockNumberBuffer, txIndexInBlockBuffer, outputNumberInTxBuffer]);
-        queryAll.push({ type: 'put', key: keyUTXO, value: outputRlp });
-        currentOutputIndex++;
-      }
+    catch (error) {
+      console.log('checkTransactionInputs   error  ', error);
+      return false;
     }
-
-    await levelDB.batch(queryAll);
-    return true;
   }
   
   async getLastBlockNumberFromDb() {
@@ -123,10 +129,20 @@ class TXPool {
         { type: 'put', key: 'lastBlockNumber', value: block.blockNumber },
         { type: 'put', key: Buffer.concat([blockPrefix, block.blockNumber]), value: block.getRlp() }
       ];
+      
+      for (let tx in block.transactions) {
+        let utxoPrevBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(tx.prev_block), blockNumberLength);
+        let txRlp = tx.getRlp(outputIndex);
+        let utxoNewKey = Buffer.concat([utxoPrefix, block.blockNumber, tx.token_id]);
+        let utxoOldKey = Buffer.concat([utxoPrefix, utxoPrevBlockNumberBuffer, tx.token_id]);
+        
+        queryAll.push({ type: 'del', key: utxoOldKey });
+        queryAll.push({ type: 'put', key: utxoNewKey, value: txRlp });
+      }
+      
       await levelDB.batch(queryAll);
       
       this.transactions = this.transactions.slice(txCount);
-      this.currentTransactionNumberInBlock = 0;
       this.newBlockNumber = this.newBlockNumber.add(new BN(config.contractblockStep));
       this.newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(this.newBlockNumber), blockNumberLength);
       console.log('New block created: ', this.newBlockNumber.toString(), ' ', 'transactions: ', txCount);
@@ -136,54 +152,6 @@ class TXPool {
     catch(err){
       logger.error('createNewBlock error ', err);
     }
-  }     
-    
-  checkInputKeys(tx) {
-    let inputKeys = tx.getInputKeys();
-    let isUnique = true;
-    for (let key of inputKeys) {
-      if (this.inputKeys[key] && key != depositInputKey) {
-        isUnique = false;
-      } else {
-        this.inputKeys[key] = true;
-      }
-    }
-    return isUnique;
-  }
-  
-  removeTransactions(txCount) {
-    this.transactions = this.transactions.slice(txCount);
-  }
-
-  getTransaction(txCount) {
-    return this.transactions.slice(0, txCount);
-  }
-
-  async getTransactionCheckInputs(txCount) {
-    let txs = this.getTransaction(txCount);
-    let allTxInputKeys = {};
-    txs = txs.filter((tx) => {
-      let inputKeys = tx.getInputKeys();
-      let isUnique = true;
-      for (let key of inputKeys) {
-        if (allTxInputKeys[key] && key != depositInputKey) {
-          isUnique = false;
-        } else {
-          allTxInputKeys[key] = true;
-        }
-      }
-      return isUnique;
-    });
-    
-    let txsValidated = [];
-    for (let tx of txs) {
-      let isValid = await checkTransactionInputs(tx);
-      if (isValid) {
-        txsValidated.push(tx);
-      }
-    }
-
-    return txsValidated;
   }
 };
 

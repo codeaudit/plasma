@@ -18,34 +18,33 @@ import { logger } from 'lib/logger';
 import txPool from 'lib/txPool';
 
 async function processDepositEvent(event){
-  const { depositor, amount, depositBlock } = event.returnValues;
+  const { depositor, amount, token_id } = event.returnValues;
 
-  let depositBlockIndexBN = new BN(depositBlock);
-  const depositBlockIndexKey = Buffer.concat([config.prefixes.depositIndexPrefix, ethUtil.toBuffer(depositBlockIndexBN)]);
+  let tokenIdBN = new BN(token_id);
+  let depositBlockIndexKey = Buffer.concat([config.prefixes.tokenIdPrefix, ethUtil.toBuffer(tokenIdBN)]);
 
-  try{
+  try {
     const existingdepositBlockIndex = await levelDB.get(depositBlockIndexKey);
     return true;
   }
   catch (error) {
     if (error.type !== "NotFoundError"){
-      throw error
+      throw error;
     }
     await levelDB.put(depositBlockIndexKey, Buffer.alloc(1, "0x01", "hex"))  
   }
   
-  const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), depositBlockIndexBN);
+  const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), tokenIdBN);
 
   let txRlpEncoded = tx.getHash(true).toString('hex');
   const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
   let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
 
-  tx.sig1 = signatureRaw;
-  tx.sig2 = signatureRaw;
+  tx.signature = signatureRaw;
 
   if (tx.validate()) {
-      txPool.addTransaction(tx);
-      logger.info('Create deposit transaction ', depositBlock);        
+    txPool.addTransaction(tx);
+    logger.info('Create deposit transaction ', token_id);        
   }
   else {
     logger.error('Deposit TX error ');        
