@@ -9,8 +9,6 @@ import RLP from 'rlp';
 import levelDB from 'lib/db';
 import web3 from 'lib/web3';
 
-import { TransactionInput } from 'lib/model/input';
-import { TransactionOutput } from 'lib/model/output';
 import { PlasmaTransaction } from 'lib/model/tx';
 
 import { createDepositTransaction } from 'lib/tx';

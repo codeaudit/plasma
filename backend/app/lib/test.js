@@ -10,8 +10,6 @@ import {
   blockNumberLength
 } from 'lib/dataStructureLengths';
 import config from "../config";
-import { TransactionInput } from 'lib/model/input';
-import { TransactionOutput } from 'lib/model/output';
 const { prefixes: { utxoPrefix } } = config;
 const ethUtil = require('ethereumjs-util'); 
 import RLP from 'rlp';

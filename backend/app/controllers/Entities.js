@@ -10,8 +10,6 @@ import config from "../config";
 const ethUtil = require('ethereumjs-util'); 
 const BN = ethUtil.BN;
 
-import { TransactionInput } from 'lib/model/input';
-import { TransactionOutput } from 'lib/model/output';
 import Block from 'lib/model/block';
 const { prefixes: { utxoPrefix } } = config;
 
@@ -20,6 +18,9 @@ import {
   txOutputNumberLength,
   blockNumberLength
 } from 'lib/dataStructureLengths';
+
+import SparseMerkle from 'lib/SparseMerkle';
+
 
 router.route('/block/:id')
   .get(async function(req, res, next) {
