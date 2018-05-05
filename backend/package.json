@@ -7,7 +7,8 @@
   "scripts": {
     "development": "nodemon --exec babel-node server.js",
     "start": "npm run build && node dist/server.js",
-    "build": "babel server.js -d dist && babel app -d dist/app"
+    "build": "babel server.js -d dist && babel app -d dist/app",
+    "test": "mocha --require babel-register --timeout 60000 --reporter spec"
   },
   "dependencies": {
     "ajv": "^5.2.3",
@@ -39,7 +40,8 @@
     "babel-plugin-module-alias": "^1.6.0",
     "babel-preset-es2015": "^6.24.1",
     "babel-preset-stage-2": "^6.24.1",
-    "babel-register": "^6.26.0"
+    "babel-register": "^6.26.0",
+    "mocha": "^5.1.1"
   },
   "engines": {
     "node": ">=7.0",

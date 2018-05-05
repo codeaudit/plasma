@@ -4,106 +4,127 @@ import ethUtil from 'ethereumjs-util';
 
 class Merkle {
   constructor (leaves) {
-    this.leaves = leaves.map(leave => {
-      return { key: this.hexToBin(leave.key) , hash: leave.value };
+    this.leaves = {};
+    leaves.forEach(leaf => {
+      this.leaves[this.toBinaryString(leaf.key)] = ethUtil.toBuffer(leaf.hash);
     });
+
     this.depth = 256;
     this.defaultHashes = [ethUtil.sha3(new Buffer(32))];
-    
-    for (let index = 0; index < this.depth - 1; index ++) {
+
+    for (let index = 0; index < this.depth - 1; index++) {
       this.defaultHashes.push(ethUtil.sha3(Buffer.concat([ this.defaultHashes[index], this.defaultHashes[index] ])));
     }
   }
 
-  buildTree() {
-    var leafCount = this.leaves.length;
+  getMerkleRoot() {
+    return this.levels[0] && this.levels[0].merkleRoot;
+  }
 
-    if (leafCount > 0) {
+  buildTree() {
+    if (Object.keys(this.leaves).length > 0) {
       this.levels = [];
       this.levels.unshift(this.leaves);
       for (let level = 0; level < this.depth; level++) {
-        let currentLevel = this.levels[0]; 
-        let nextLevel = [];
-        
-        for (let index = 0; index < currentLevel.length; index ++) {
-          let leaf = currentLevel[index];
-          let leafKey = leaf.key;
+        let currentLevel = this.levels[0];
+        let nextLevel = {};
+
+        Object.keys(currentLevel).forEach(leafKey => {
+          let leafHash = currentLevel[leafKey];
           let isEvenLeaf = this.isEvenLeaf(leafKey);
-
-          let neighborLeafKey = isEvenLeaf ? this.binStrIncrement(leafKey) : this.binStrDecrement(leafKey);
-          let neighborLeaf = currentLevel.find(item => item.key == neighborLeafKey);
-          let neighborLeafHash;
-          if (!neighborLeaf) {
-            neighborLeafHash = this.defaultHashes[index];
-          } else {
-            neighborLeafHash = neighborLeaf.hash;
-          }
-
           let parentLeafKey = leafKey.slice(0, -1);
+          let neighborLeafKey = parentLeafKey + (isEvenLeaf ? '1' : '0');
 
-          if (!nextLevel.find(item => item.key == parentLeafKey)) {
-
-            let parentLeafHash = isEvenLeaf ? ethUtil.sha3(Buffer.concat([ leaf.hash, neighborLeafHash ])) : ethUtil.sha3(Buffer.concat([ neighborLeafHash, leaf.hash ]));
-
-            nextLevel.push({ key: parentLeafKey, hash: parentLeafHash });
+          let neighborLeafHash = currentLevel[neighborLeafKey];
+          if (!neighborLeafHash) {
+            neighborLeafHash = this.defaultHashes[level];
           }
-        }
-        
+
+          if (!nextLevel[parentLeafKey]) {
+            let parentLeafHash = isEvenLeaf ? ethUtil.sha3(Buffer.concat([ leafHash, neighborLeafHash ])) : ethUtil.sha3(Buffer.concat([ neighborLeafHash, leafHash ]));
+            if (level == this.depth - 1) {
+              nextLevel['merkleRoot'] = parentLeafHash;
+            } else {
+              nextLevel[parentLeafKey] = parentLeafHash;
+            }
+          }
+        });
+
         this.levels.unshift(nextLevel);
       }
     }
   }
-  
+
   getProof(leaf) {
     if (this.levels.length < 256) {
       this.buildTree();
     }
 
     let proof = [];
-    let leafKey = this.hexToBin(leaf.key);
+    let leafKey = this.toBinaryString(leaf.key);
 
     for (let level = this.depth; level >= 1; level--) {
-
       let currentKey = leafKey.slice(0, level);
       let isEvenLeaf = this.isEvenLeaf(currentKey);
 
-      let neighborLeafHash;
-      let neighborLeafKey = isEvenLeaf ? this.binStrIncrement(currentKey) : this.binStrDecrement(currentKey);
-      
-      let currentLevels = this.levels[level - 1];
-      
-      let neighborLeaf = currentLevels.find(item => item.key == neighborLeafKey);
-      if (!neighborLeaf) {
-        neighborLeafHash = this.defaultHashes[level - 1];
-      } else {
-        neighborLeafHash = neighborLeaf.hash;
+      let neighborLeafKey = currentKey.slice(0, -1) + (isEvenLeaf ? '1' : '0');
+      let currentLevel = this.levels[level];
+      let neighborLeafHash = currentLevel[neighborLeafKey];
+
+      if (!neighborLeafHash) {
+        neighborLeafHash = this.defaultHashes[this.depth - level];
       }
       proof.push({ [isEvenLeaf ? 'right' : 'left']: neighborLeafHash });
     }
 
     return proof;
   }
-  
+
   checkProof(proof, leafHash, merkleRoot) {
-    let hash = leafHash;
-    
+    if (!merkleRoot || !leafHash || !proof) {
+      return false;
+    }
+    let hash = ethUtil.toBuffer(leafHash);
+
     for (var level = 0; level < proof.length; level++) {
       let currentProofHash = proof[level];
-      hash = currentProofHash.right ? ethUtil.sha3(Buffer.concat([ hash, currentProofHash.right ])) : ethUtil.sha3(Buffer.concat([ currentProofHash.left, hash ]))
+      hash = currentProofHash.right ? ethUtil.sha3(Buffer.concat([ hash, currentProofHash.right ])) : ethUtil.sha3(Buffer.concat([ currentProofHash.left, hash ]));
     }
-    
-    return hash == merkleRoot;
+    return hash.toString('hex') == merkleRoot.toString('hex');
   }
-  
+
   isEvenLeaf(leafKey) {
     return leafKey[leafKey.length - 1] == '0';
   }
-  
-  
+
+  isHex (value) {
+    var hexRegex = /^[0-9A-Fa-f]{2,}$/;
+    return hexRegex.test(value);
+  }
+
+  toBinaryString(value) {
+    let hexValue = this.toHexString(value);
+
+    if (hexValue) {
+      return this.hexToBin(hexValue);
+    } else {
+      throw new Error(`Unsupported format: ${value}`);
+    }
+  }
+
+  toHexString(value) {
+    if (value instanceof Buffer) {
+      return value.toString('hex');
+    } else if (this.isHex(value)) {
+      return value;
+    }
+    return null;
+  }
+
   hexToBin(str) {
     return str.split('').map(item => parseInt(item, 16).toString(2).padStart(4, '0')).join('');
   }
-  
+
   binStrIncrement(str) {
     let done = false;
     let current = str.length - 1;
@@ -118,7 +139,7 @@ class Merkle {
     }
     return str.join('');
   }
-  
+
   binStrDecrement(str) {
     let done = false;
     let current = str.length - 1;
@@ -134,6 +155,5 @@ class Merkle {
     return str.join('');
   }
 }
-
 
 export default Merkle;

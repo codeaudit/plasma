@@ -101,20 +101,10 @@ class TXPool {
         await this.getLastBlockNumberFromDb();
       }
       
-      let txCount;
-      let transactions;
+      let txCount = this.transactions.length;
+      let transactions = this.transactions;
       
-      if (this.transactions.length == 0) {
-        return false;
-      }
-      if (this.transactions.length > 2**16){
-        txCount = 2**16;
-      } else {
-        txCount = this.transactions.length;
-      }
-
-      transactions = this.transactions.slice(0, txCount);
-      if (transactions.length == 0) {
+      if (txCount == 0) {
         return false;
       }
       

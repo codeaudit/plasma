@@ -9,5 +9,6 @@ module.exports = {
   previousHashLength: 32,
   txOutputNumberLength: 1,
   txAmountLength: 32,
-  txToAddressLength: 20
+  txToAddressLength: 20,
+  tokenIdLength: 32
 };

@@ -16,10 +16,9 @@ import { logger } from 'lib/logger';
 import txPool from 'lib/txPool';
 
 async function processDepositEvent(event){
-  const { depositor, amount, token_id } = event.returnValues;
+  const { depositor, amount, depositBlock, blockNumber } = event.returnValues;
 
-  let tokenIdBN = new BN(token_id);
-  let depositBlockIndexKey = Buffer.concat([config.prefixes.tokenIdPrefix, ethUtil.toBuffer(tokenIdBN)]);
+  let depositBlockIndexKey = Buffer.concat([config.prefixes.tokenIdPrefix, ethUtil.toBuffer(depositBlock)]);
 
   try {
     const existingdepositBlockIndex = await levelDB.get(depositBlockIndexKey);
@@ -32,7 +31,7 @@ async function processDepositEvent(event){
     await levelDB.put(depositBlockIndexKey, Buffer.alloc(1, "0x01", "hex"))  
   }
   
-  const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), tokenIdBN);
+  const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), depositBlock);
 
   let txRlpEncoded = tx.getHash(true).toString('hex');
   const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
@@ -42,7 +41,7 @@ async function processDepositEvent(event){
 
   if (tx.validate()) {
     txPool.addTransaction(tx);
-    logger.info('Create deposit transaction ', token_id);        
+    logger.info('Create deposit transaction ', depositBlock);        
   }
   else {
     logger.error('Deposit TX error ');        

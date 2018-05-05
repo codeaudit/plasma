@@ -18,7 +18,7 @@ app.use(RouterModule.router);
 
 require('./app/lib/errorHandler')(app);
 
-BlockCreator.start();
+// BlockCreator.start();
 
 app.listen(SERVER_PORT, function () {
   logger.info('Process ' + process.pid + ' is listening on ' + SERVER_PORT);

@@ -5,7 +5,7 @@ import "./RLP.sol";
 import "./HeapLib.sol";
 import "./ArrayOp.sol";
 import "./ByteUtils.sol";
-import "./ECRecover.sol";
+import "./ECRecovery.sol";
 
 contract Root {
     using SafeMath for uint256;
@@ -19,10 +19,12 @@ contract Root {
      * Events
      */
     event BlockSubmitted(address operator, bytes32 merkleRoot, uint blockNumber);
-    event Deposit(address depositor, uint amount, uint depositBlock);
-    event Exit(address exitor, uint exitId);
+    event DepositAdded(address depositor, uint amount, uint depositBlock, uint blockNumber);
+    event ExitAdded(address exitor, uint exitId, uint priority, uint tokenId);
     event ExitChallengedEvent(uint exitId);
-    event ExitCompleteEvent(uint blockNumber, uint exitBlockNumber, uint exitTxIndex, uint exitOIndex);
+    event ChallengedInvalidHistory(uint exitId, uint tokenId);
+    event ExitRespondedEvent(uint exitId);
+    event ExitCompleteEvent(uint blockNumber, uint exitBlockNumber, uint exitTokenId, uint exitDenom);
     event Log(string log);
     event Log(bytes log);
     event Log(bytes32 log);
@@ -32,12 +34,10 @@ contract Root {
 
     mapping(address => bool) public operators;
 
-    uint public currentBlock;
-    uint public depositBlock;
-    uint public lastParentBlock;
-
     uint constant week = 7 days;
     uint constant twoWeeks = 2 weeks;
+
+    mapping (uint => uint) public challenged;
 
     /*
      *  Modifiers
@@ -54,43 +54,58 @@ contract Root {
      * Block struct
      */
     struct Block {
-        bytes32 merkleRootHash;
-        uint createdAt;
+        uint block_num;
+        bytes32 merkle_root;
+        uint time;
     }
+
     /*
      * Transaction struct
      */
     struct Transaction {
-        uint32 blockNumber1;
-        uint32 txNumberInBlock1;
-        uint8 outputNumberInTX1;
-        uint32 blockNumber2;
-        uint32 txNumberInBlock2;
-        uint8 outputNumberInTX2;
-        address newOwner1;
-        uint denom1;
-        address newOwner2;
-        uint denom2;
-        uint fee;
-        address sender;
+        uint prevhash;
+        uint prev_block;
+        uint token_id;
+        address new_owner;
     }
-    
+
+    /*
+     * Token
+     */
+    struct Token {
+        uint token_id;
+        uint denomination;
+    }
+
+    /*
+     * Deposit
+     */
+    struct Deposit {
+        uint block_num;
+        address depositor;
+        Token token;
+        uint time;
+    }
+ 
     /*
      * Exit record
      */
-    struct ExitRecord {
-        uint blockNumber;
-        uint txIndex;
-        uint oIndex;
-        address owner;
-        uint amount;
+    struct Exit {
+        uint block_num;
+        uint txhash;
+        Transaction exittx;
         uint priority;
     }
+
+    uint public current_blk;
+    uint public deposit_blk;
 
     /*
      * Blockchain
      */
     mapping(uint => Block) public childChain;
+    mapping(uint => Token) public tokens;
+    mapping(uint => Deposit) public deposits;
 
     /*
      * Heap for exits
@@ -100,15 +115,16 @@ contract Root {
     /*
      * Exit records
      */ 
-    mapping(uint => uint[]) public exitIds;
-    mapping(uint => ExitRecord) public exitRecords;
+    mapping(uint => uint[]) public exit_ids;
+    mapping(uint => Exit) public exitRecords;
 
-
+    /*
+     * 
+     */ 
     function Root() public {
         authority = msg.sender;
-        currentBlock = 1000;
-        depositBlock = 1;
-        lastParentBlock = block.number;
+        current_blk = 0;
+        deposit_blk = 0;
     }
 
     function setOperator(address operator, bool status) public returns (bool success)
@@ -118,216 +134,189 @@ contract Root {
         return true;
     }
 
-    function submitBlock(bytes32 merkleRoot) public {
-        require(operators[msg.sender] || msg.sender == authority);
-
-        uint nblock = currentBlock;
-        Block memory newBlock = Block({
-            merkleRootHash: merkleRoot,
-            createdAt: block.timestamp
-        });
-        childChain[nblock] = newBlock;
-        currentBlock = currentBlock.add(1000);
-        depositBlock = 1;
-        lastParentBlock = block.number;
-        emit BlockSubmitted(msg.sender, merkleRoot, nblock);
-    }
-
     function getTransactionFromRLP(bytes rlp) public pure returns (
-        uint blockNumber1,
-        uint txNumberInBlock1,
-        uint outputNumberInTX1,
-        uint blockNumber2,
-        uint txNumberInBlock2,
-        uint outputNumberInTX2,
-        address newOwner1,
-        uint denom1,
-        address newOwner2,
-        uint denom2,
-        uint fee) {
+        uint prevhash,
+        uint prev_block,
+        uint token_id,
+        address new_owner) {
         RLP.RLPItem[] memory txList = rlp.toRLPItem().toList();
-        require(txList.length == 11);
-        return (txList[0].toUint(), 
-            txList[1].isEmpty() ? 0 : txList[1].toUint(),
-            txList[2].isEmpty() ? 0 : txList[2].toUint(),
-            txList[3].toUint(),
-            txList[4].isEmpty() ? 0 : txList[4].toUint(),
-            txList[5].isEmpty() ? 0 : txList[5].toUint(),
-            txList[6].toAddress(),
-            txList[7].toUint(),
-            txList[8].toAddress(),
-            txList[9].toUint(),
-            txList[10].toUint()
+        require(txList.length == 4);
+        return (
+            txList[0].toUint(), 
+            txList[1].toUint(),
+            txList[2].toUint(),
+            txList[3].toAddress()
         );
-
     }
 
-    function deposit() public payable
-    {
+    function submitBlock(bytes32 merkleRoot, uint block_num) public {
         require(operators[msg.sender] || msg.sender == authority);
-        require(depositBlock < 1000);
-        bytes32 root = keccak256(msg.sender, msg.value);
-        uint dblock = getCurrentDepositBlock();
+        require(uint8(block_num) == current_blk + 1);
+
         Block memory newBlock = Block({
-            merkleRootHash: root,
-            createdAt: block.timestamp
+            block_num: current_blk,
+            merkle_root: merkleRoot,
+            time: block.timestamp
         });
-        childChain[dblock] = newBlock;
-        depositBlock = depositBlock.add(1);
-        emit Deposit(msg.sender, msg.value, dblock);
+        childChain[block_num] = newBlock;
+        emit BlockSubmitted(msg.sender, merkleRoot, block_num);
     }
 
-    function startExit(uint blockNumber, uint txIndex, uint oIndex, bytes txBytes, bytes proof, bytes confirmSig) public returns (uint exitId) {
-        require(blockNumber > 0);
+    function deposit() public payable {
+        require(operators[msg.sender] || msg.sender == authority);
+        Token memory token;
+        token.denomination = msg.value;
+        token.token_id = uint(keccak256(msg.sender, msg.value, deposit_blk));
+        
+        tokens[token.token_id] = token;
+        Deposit memory depo;
+        depo.token = token;
+        depo.block_num = current_blk;
+        depo.time = block.timestamp;
+        depo.depositor = msg.sender;
+        deposits[deposit_blk] = depo;
+        emit DepositAdded(msg.sender, msg.value, token.token_id, depo.block_num);
+    }
 
-        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
-        require(txList.length == 11);
+    function checkSig(bytes32 tx_hash, bytes sig) internal view returns (bool) {
+        return msg.sender == ECRecovery.recover(tx_hash, sig);
+    }
 
-        Block memory bl = childChain[blockNumber];
-        require(checkSigs(keccak256(txBytes), bl.merkleRootHash, txList[0].toUint(), txList[3].toUint(), confirmSig));
-        bytes32 merkleHash = keccak256(keccak256(txBytes), ByteUtils.slice(confirmSig, 0, 130));
-        require(checkProof(merkleHash, bl.merkleRootHash, proof));
+    function startExit(uint block_num, bytes tx1, bytes tx0, bytes proof1, bytes proof0, bytes sig) public returns (uint exit_id) {
+        require(block_num > 0);
+        Block memory bl = childChain[block_num];
 
-        require(txList[6 + 2 * oIndex].toAddress() == msg.sender);
+        require(checkSig(keccak256(tx1), sig));
+        require(checkProof(keccak256(keccak256(tx1), sig), bl.merkle_root, proof1));
+        
+        uint prev_hash; 
+        uint prev_blk; 
+        uint token_id; 
+        (prev_hash, prev_blk, token_id, ) = getTransactionFromRLP(tx1);
+        
+        require(tokens[token_id].denomination > 0);
+        require(checkProof(keccak256(keccak256(tx0), sig), childChain[prev_blk].merkle_root, proof0));
+
+        exit_id = block_num;
 
         uint priority = 0;
         uint weekBefore = block.timestamp - week;
 
-        if (bl.createdAt > weekBefore) {
-            priority = bl.createdAt;
-        } else {
+        if (bl.time > weekBefore) 
+            priority = bl.time;
+        else 
             priority = weekBefore;
-        }
         
-        exitId = blockNumber * 1000000000 + 10000 * txIndex + oIndex;
-        ExitRecord storage record = exitRecords[exitId];
-        require(record.blockNumber == 0);
+        Exit memory record = exitRecords[exit_id];
+        require(record.block_num == 0);
 
         // Construct a new exit.
-        record.blockNumber = blockNumber;
-        record.txIndex = txIndex;
-        record.oIndex = oIndex;
-        record.owner = msg.sender;
-        record.amount = txList[7 + 2 * oIndex].toUint();
+        record.block_num = exit_id;
+        record.exittx.token_id = token_id;
+        record.exittx.new_owner = msg.sender;
+        record.txhash = uint(keccak256(tx1));
+        record.exittx.prev_block = prev_blk;
+        record.exittx.prevhash = prev_hash;
         record.priority = priority;
 
         exits.add(priority);
-        exitIds[priority].push(exitId);
+        exit_ids[priority].push(exit_id);
 
-        emit Exit(msg.sender, exitId);
-        return exitId;
+        emit ExitAdded(msg.sender, priority, exit_id, record.exittx.token_id);
+        return exit_id;
     }
 
-    function startDepositExit(uint256 depositPos, uint256 amount) public
-    {
-        uint256 blknum = depositPos / 1000000000;
-        // Makes sure that deposit position is actually a deposit
-        require(blknum % 1000 != 0);
-        bytes32 root = childChain[blknum].merkleRootHash;
-        bytes32 depositHash = keccak256(msg.sender, amount);
-        require(root == depositHash);
+    function challengeSpent(uint exit_id, uint blk_num, bytes tx1, bytes proof, bytes sig) public { 
+        require(checkProof(keccak256(keccak256(tx1), sig), childChain[blk_num].merkle_root, proof));
 
-        uint priority = 0;
-        uint weekBefore = block.timestamp - week;
+        Exit memory record = exitRecords[exit_id];
+        require(record.block_num > 0);
 
-        if (childChain[blknum].createdAt > weekBefore) {
-            priority = childChain[blknum].createdAt;
-        } else {
-            priority = weekBefore;
-        }
+        uint prev_hash; 
+        uint token_id; 
+        (prev_hash, , token_id, ) = getTransactionFromRLP(tx1);
         
-        ExitRecord storage record = exitRecords[depositPos];
-        require(record.blockNumber == 0);
+        require(prev_hash == uint(record.exittx.prevhash) && record.block_num > blk_num);
+        require(token_id == record.exittx.token_id);
 
-        // Construct a new exit.
-        record.blockNumber = blknum;
-        record.txIndex = 0;
-        record.oIndex = 0;
-        record.owner = msg.sender;
-        record.amount = amount;
-        record.priority = priority;
-
-        exits.add(priority);
-        exitIds[priority].push(depositPos);
-
-        emit Exit(msg.sender, depositPos);
+        exit_ids[record.priority].remove(exit_id);
+        delete exitRecords[exit_id];
+        emit ExitChallengedEvent(exit_id);
     }
 
-    function challengeExit(
-        uint exitId,
-        uint blockNumber,
-        bytes txBytes,
-        bytes proof,
-        bytes sigs,
-        bytes confirmationSig
-    ) public returns (bool success)
-    {
-        ///emit Log(blockNumber);
-        Block memory blk = childChain[blockNumber];
+    function challengeDoubleSpend(uint exit_id, uint blk_num, bytes tx1, bytes proof, bytes sig) public { 
+        require(checkProof(keccak256(keccak256(tx1), sig), childChain[blk_num].merkle_root, proof));
 
-        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
-        require(txList.length == 11);
+        Exit memory record = exitRecords[exit_id];
+        require(record.block_num > 0);
+
+        uint prev_hash; 
+        uint token_id; 
+        (prev_hash, , token_id, ) = getTransactionFromRLP(tx1);
+
+        require(prev_hash == record.exittx.prevhash && blk_num < record.block_num);
+        require(token_id == record.exittx.token_id);
+        exit_ids[record.priority].remove(exit_id);
+        delete exitRecords[exit_id];
+        emit ExitChallengedEvent(exit_id);
+    }
+
+    function challengeInvalidHistory(uint exit_id, uint blk_num, bytes tx0, bytes proof, bytes sig) public { 
+        require(checkProof(keccak256(keccak256(tx0), sig), childChain[blk_num].merkle_root, proof));
         
-        ExitRecord memory record = exitRecords[exitId];
-        require(record.blockNumber > 0);
+        Exit memory record = exitRecords[exit_id];
+        require(record.block_num > 0);
 
-        bytes32 merkleHash = keccak256(keccak256(txBytes), sigs);
-        require(checkProof(merkleHash, blk.merkleRootHash, proof));
-        //emit Log(blockNumber);
-        //emit Log(blk.merkleRootHash);
-        //emit Log(record.owner);
-        bytes32 confirmationHash = keccak256(keccak256(txBytes), blk.merkleRootHash);
-        //emit Log(ECRecovery.recover(confirmationHash, confirmationSig));
-        //emit Log(merkleHash);
-        //emit Log(ECRecovery.recover(confirmationHash, confirmationSig));
+        uint prev_hash; 
+        uint token_id; 
+        (prev_hash, , token_id, ) = getTransactionFromRLP(tx0);
 
-        require(record.owner == ECRecovery.recover(confirmationHash, confirmationSig));
+        require(record.exittx.token_id == token_id);
+        require(tokens[token_id].denomination > 0);
+        require(blk_num < record.block_num - 1);
 
-        // if the transaction spends the given exit on plasma chain.
-        if (isExitSpent(txBytes, record)) {
-            exitIds[record.priority].remove(exitId);
-            delete exitRecords[exitId];
-            emit ExitChallengedEvent(exitId);
-            return true;
+        challenged[exit_id] = uint(keccak256(tx0));
+        emit ChallengedInvalidHistory(exit_id, token_id);
+    }
+
+    function respondChallenge(uint exit_id, uint blk_num, bytes childtx, bytes proof, bytes sig) public {
+        require(challenged[exit_id] > 0);
+        Exit memory record = exitRecords[exit_id];
+        require(record.block_num > 0);
+
+        require(checkProof(keccak256(keccak256(childtx), sig), childChain[blk_num].merkle_root, proof));
+
+        uint prev_hash; 
+        uint token_id; 
+        (prev_hash, , token_id, ) = getTransactionFromRLP(childtx);
+        // if direct child
+        if (prev_hash == challenged[exit_id] ) {
+            if (blk_num <= record.exittx.prev_block && token_id == record.exittx.token_id ) {
+                emit ExitRespondedEvent(exit_id);
+            } else {
+                exit_ids[record.priority].remove(exit_id);
+                delete exitRecords[exit_id];
+                emit ExitChallengedEvent(exit_id);
+            }
         }
-        
-        return false;
     }
 
     function finalizeExits() public returns (bool success) {
-        while (exits.data.length!=0 && now > exits.peek() + twoWeeks) {
+        while (exits.data.length != 0 && block.timestamp > exits.peek() + twoWeeks) {
             uint priority = exits.pop();
-            for (uint i = 0; i < exitIds[priority].length; i++) {
-                uint index = exitIds[priority][i];
-                ExitRecord memory record = exitRecords[index];
-                record.owner.transfer(record.amount);
+            for (uint i = 0; i < exit_ids[priority].length; i++) {
+                uint index = exit_ids[priority][i];
+                Exit memory record = exitRecords[index];
+                record.exittx.new_owner.transfer(tokens[record.exittx.token_id].denomination);
 
-                emit ExitCompleteEvent(currentBlock, record.blockNumber, record.txIndex, record.oIndex);
+                emit ExitCompleteEvent(current_blk, record.block_num, record.exittx.token_id, tokens[record.exittx.token_id].denomination);
                 delete exitRecords[index];
+                delete tokens[record.exittx.token_id];
             }
-            delete exitIds[priority];
+            delete exit_ids[priority];
+            
         }
         return true;
-    }
-
-    function checkSigs(bytes32 txHash, bytes32 rootHash, uint256 blknum1, uint256 blknum2, bytes sigs) internal pure returns (bool)
-    {
-        require(sigs.length % 65 == 0 && sigs.length <= 260);
-        bytes memory sig1 = ByteUtils.slice(sigs, 0, 65);
-        bytes memory sig2 = ByteUtils.slice(sigs, 65, 65);
-        bytes memory confSig1 = ByteUtils.slice(sigs, 130, 65);
-        bytes32 confirmationHash = keccak256(txHash, rootHash);
-
-        bool check1 = true;
-        bool check2 = true;
-        blknum1;
-
-        check1 = ECRecovery.recover(txHash, sig1) == ECRecovery.recover(confirmationHash, confSig1);
-        if (blknum2 > 0) {
-            bytes memory confSig2 = ByteUtils.slice(sigs, 195, 65);
-            check2 = ECRecovery.recover(txHash, sig2) == ECRecovery.recover(confirmationHash, confSig2);
-        }
-        return check1 && check2;
     }
 
     function checkProof(bytes32 merkle, bytes32 root, bytes proof) pure internal returns (bool valid)
@@ -349,60 +338,43 @@ contract Root {
         return hash == root;
     }
 
-    function isExitSpent(bytes txBytes, ExitRecord record) pure internal returns (bool spent)
-    {
-        RLP.RLPItem[] memory txList = txBytes.toRLPItem().toList();
-        require(txList.length == 11);
-        uint blockNumber;
-        uint txIndex;
-        uint oIndex;
-
-        if (!txList[0].isEmpty()) {
-            blockNumber = txList[0].toUint();
-            txIndex = txList[1].isEmpty() ? 0 : txList[1].toUint();
-            oIndex = txList[2].isEmpty() ? 0 : txList[2].toUint();
-            if (record.blockNumber == blockNumber && record.txIndex == txIndex && record.oIndex == oIndex) {
-                return true;
-            }
-        }
-        if (!txList[3].isEmpty()) {
-            blockNumber = txList[3].toUint();
-            txIndex = txList[4].isEmpty() ? 0 : txList[4].toUint();
-            oIndex = txList[5].isEmpty() ? 0 : txList[5].toUint();
-            if (record.blockNumber == blockNumber && record.txIndex == txIndex && record.oIndex == oIndex) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
     function getCurrentBlock() public view returns(uint) {
-        return currentBlock;
+        return current_blk;
     }
 
     function getDepositBlock() public view returns(uint) {
-        return depositBlock;
+        return deposit_blk;
     }
 
-    function getCurrentDepositBlock() public view returns(uint) {
-        return currentBlock.sub(1000).add(depositBlock);
-    }
-
-    function getExit(uint exitId) public view returns (address, uint, uint)
+    function getExit(uint exit_id) public view returns (address, uint, uint, uint)
     {
-        ExitRecord memory er = exitRecords[exitId];
-        return ( er.owner, er.amount, er.priority );
+        Exit memory er = exitRecords[exit_id];
+        return ( er.exittx.new_owner, er.exittx.token_id, tokens[er.exittx.token_id].denomination, er.priority );
     }
 
-    function getChain(uint blockNumber) public view returns (bytes32, uint)
+    function getChain(uint blknum) public view returns (bytes32, uint)
     {
-        return (childChain[blockNumber].merkleRootHash, childChain[blockNumber].createdAt);
+        return (childChain[blknum].merkle_root, childChain[blknum].time);
     }
 
     function getBalance(address addr) public view returns(uint) {
         return addr.balance;
+    } 
+
+    function getDeposit(uint deposit_num) public view returns (uint block_num,
+        address depositor,
+        uint token_id,
+        uint amount,
+        uint time) {
+
+        require(deposits[deposit_num].time > 0);
+
+        return (
+            deposits[deposit_num].block_num,
+            deposits[deposit_num].depositor,
+            deposits[deposit_num].token.token_id,
+            deposits[deposit_num].token.denomination,
+            deposits[deposit_num].time
+        );
     }
-
-
 }

@@ -12,15 +12,13 @@ const BN = ethUtil.BN;
 
 import Block from 'lib/model/block';
 const { prefixes: { utxoPrefix } } = config;
+import { PlasmaTransaction } from 'lib/model/tx';
 
 import {
-  txNumberLength,
+  tokenIdLength,
   txOutputNumberLength,
   blockNumberLength
 } from 'lib/dataStructureLengths';
-
-import SparseMerkle from 'lib/SparseMerkle';
-
 
 router.route('/block/:id')
   .get(async function(req, res, next) {
@@ -74,27 +72,23 @@ router.route('/uxto')
       const uxtos = [];    
       const start = Buffer.concat([utxoPrefix, 
         Buffer.alloc(blockNumberLength),
-        Buffer.alloc(txNumberLength),
-        Buffer.alloc(txOutputNumberLength)]
-      );
+        Buffer.alloc(tokenIdLength)
+      ]);
       const end = Buffer.concat([utxoPrefix, 
-        Buffer.from("ff".repeat(blockNumberLength + txNumberLength + txOutputNumberLength), 'hex')]
+        Buffer.from("ff".repeat(blockNumberLength + tokenIdLength), 'hex')]
       );
       
       let blockStart = utxoPrefix.length;
       let txStart = blockStart + blockNumberLength;
-      let outputStart = txStart + txNumberLength;
+      let outputStart = txStart + tokenIdLength;
       
       levelDB.createReadStream({gte: start, lte: end})
         .on('data', function (data) {
-          let output = new TransactionOutput(data.value);
+          let tx = new PlasmaTransaction(data.value);
           
-          let outputJson = output.getJson();
+          let txJson = tx.getJson();
           outputJson.blockNumber = ethUtil.bufferToInt(data.key.slice(blockStart, txStart))
-          outputJson.txNumber = ethUtil.bufferToInt(data.key.slice(txStart, outputStart))
-          outputJson.outputNumber = ethUtil.bufferToInt(data.key.slice(outputStart))
-
-          uxtos.push(outputJson);
+          uxtos.push(txJson);
         })
         .on('error', function (error) {
             console.log('error', error);

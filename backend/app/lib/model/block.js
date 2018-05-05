@@ -1,6 +1,7 @@
 'use strict';
 
-import MerkleTools from 'merkle-tools';
+// import MerkleTools from 'merkle-tools';
+import SparseMerkle from 'lib/SparseMerkle';
 
 import { PlasmaTransaction } from 'lib/model/tx';
 import RLP from 'rlp';
@@ -17,13 +18,10 @@ class Block {
       this.blockNumber = data.blockNumber;
       this.transactions = data.transactions || [];
 
-      this.merkle = new MerkleTools({ hashType: 'SHA3-256' });
-      for (let i = 0, l = this.transactions.length; i < l; i++) {
-        let tx = this.transactions[i];
-        this.merkle.addLeaf(tx.merkleHash());
-      }
-
-      this.merkle.makeTree(false);
+      let leaves = this.transactions.map(tx => {
+        return { key: tx.token_id, hash: tx.getMerkleHash() };
+      });
+      this.merkle = new SparseMerkle(leaves);
       this.merkleRootHash = this.merkle.getMerkleRoot();
     }
   }
@@ -50,14 +48,13 @@ class Block {
 
     return ethUtil.baToJSON(data);
   }
-  
+
   getJson() {
     let data = {
       blockNumber: ethUtil.bufferToInt(this.blockNumber.toString()),
       merkleRootHash: this.merkleRootHash.toString('hex'),
       transactions: []
     };
-    let transactions = [];
 
     for (let txRlp of this.transactions) {
       let tx = new PlasmaTransaction(txRlp);
