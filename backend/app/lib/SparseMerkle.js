@@ -55,7 +55,7 @@ class Merkle {
     }
   }
 
-  getProof(leaf) {
+  getProof(leaf, returnBinary) {
     if (this.levels.length < 256) {
       this.buildTree();
     }
@@ -74,7 +74,12 @@ class Merkle {
       if (!neighborLeafHash) {
         neighborLeafHash = this.defaultHashes[this.depth - level];
       }
-      proof.push({ [isEvenLeaf ? 'right' : 'left']: neighborLeafHash });
+      if (returnBinary) {
+        proof.push(new Buffer(isEvenLeaf ? [0x01] : [0x00]));
+        proof.push(neighborLeafHash);
+      } else {
+        proof.push({ [isEvenLeaf ? 'right' : 'left']: neighborLeafHash });
+      }
     }
 
     return proof;

@@ -49,9 +49,9 @@ class PlasmaTransaction {
     // this._outputsRlp = [];
   }
 
-  getRlp(excludeSignatures) {
+  getRlp(excludeSignature) {
     let data = transactionFields.reduce((res, field) => {
-      if (!(excludeSignatures && field.name == 'signature')) {
+      if (!(excludeSignature && field.name == 'signature')) {
         res.push(this[field.name]);
       }
       return res;
@@ -71,10 +71,11 @@ class PlasmaTransaction {
   }
 
   getAddressFromSignature(hex) {
-    let txRlpEncoded = ethUtil.sha3(this.getRlp(true)).toString('hex');
+    let txRlpEncoded = ethUtil.sha3(this.getRlp(true));
+    let txRlpHashed =  ethUtil.hashPersonalMessage(txRlpEncoded);
     if (this.signature) {
       let { v, r, s } = ethUtil.fromRpcSig(ethUtil.addHexPrefix(this.signature));
-      let publicAddress = ethUtil.ecrecover(Buffer.from(txRlpEncoded, 'hex'), v, r, s);
+      let publicAddress = ethUtil.ecrecover(Buffer.from(txRlpHashed, 'hex'), v, r, s);
       let address = ethUtil.pubToAddress(publicAddress);
       if (hex) {
         address = ethUtil.bufferToHex(address);
@@ -99,8 +100,7 @@ class PlasmaTransaction {
     if (!this.signature) {
       this.signature = '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
     }
-
-    return ethUtil.sha3(Buffer.concat([ this.getHash(true), ethUtil.toBuffer(this.sig1) ]));
+    return ethUtil.sha3(Buffer.concat([ this.getHash(true), ethUtil.toBuffer(this.signature) ]));
   }
 
   getJson() {

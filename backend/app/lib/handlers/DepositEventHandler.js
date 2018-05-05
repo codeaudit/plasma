@@ -17,7 +17,7 @@ import txPool from 'lib/txPool';
 
 async function processDepositEvent(event){
   const { depositor, amount, depositBlock, blockNumber } = event.returnValues;
-
+  
   let depositBlockIndexKey = Buffer.concat([config.prefixes.tokenIdPrefix, ethUtil.toBuffer(depositBlock)]);
 
   try {
@@ -34,10 +34,9 @@ async function processDepositEvent(event){
   const tx = await createDepositTransaction(depositor, new Web3.utils.BN(amount), depositBlock);
 
   let txRlpEncoded = tx.getHash(true).toString('hex');
-  const signature = ethUtil.ecsign(Buffer.from(txRlpEncoded, 'hex'), Buffer.from(config.plasmaOperatorKey, 'hex'));
-  let signatureRaw = ethUtil.toRpcSig(signature.v, signature.r, signature.s);
+  const signature = await web3.eth.sign(ethUtil.addHexPrefix(txRlpEncoded), config.plasmaOperatorAddress);
 
-  tx.signature = signatureRaw;
+  tx.signature = signature;
 
   if (tx.validate()) {
     txPool.addTransaction(tx);

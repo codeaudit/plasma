@@ -32,13 +32,12 @@ class TXPool {
       await this.getLastBlockNumberFromDb();
     }
 
-    let isValid = await checkTransaction(tx);
+    let isValid = await this.checkTransaction(tx);
 
     if (!isValid) {
       return false;
     }
     
-    // await this.updateUtxos(tx, ++this.currentTransactionNumberInBlock);
     this.transactions.push(tx);
     return true;
   }
@@ -47,7 +46,7 @@ class TXPool {
   async checkTransaction(transaction) {
     try {
       let address = ethUtil.addHexPrefix(transaction.getAddressFromSignature('hex').toLowerCase());    
-      
+
       if (new BN(transaction.prev_block).eq(depositPreviousBlockBn)) {
         let valid = address == config.plasmaOperatorAddress.toLowerCase();
         if (!valid) {
@@ -107,35 +106,36 @@ class TXPool {
       if (txCount == 0) {
         return false;
       }
-      
+
       const newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(this.newBlockNumber), blockNumberLength);
       const blockData = {
         blockNumber:  newBlockNumberBuffer,
         transactions: transactions
       }
       const block = new Block(blockData); 
-      
+
       let queryAll = [
         { type: 'put', key: 'lastBlockNumber', value: block.blockNumber },
         { type: 'put', key: Buffer.concat([blockPrefix, block.blockNumber]), value: block.getRlp() }
       ];
       
-      for (let tx in block.transactions) {
+      for (let tx of block.transactions) {
         let utxoPrevBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(tx.prev_block), blockNumberLength);
-        let txRlp = tx.getRlp(outputIndex);
-        let utxoNewKey = Buffer.concat([utxoPrefix, block.blockNumber, tx.token_id]);
-        let utxoOldKey = Buffer.concat([utxoPrefix, utxoPrevBlockNumberBuffer, tx.token_id]);
-        
+        let txRlp = tx.getRlp();
+        let utxoNewKey = Buffer.concat([utxoPrefix, block.blockNumber, ethUtil.toBuffer(tx.token_id)]);
+        let utxoOldKey = Buffer.concat([utxoPrefix, utxoPrevBlockNumberBuffer, ethUtil.toBuffer(tx.token_id)]);
+
         queryAll.push({ type: 'del', key: utxoOldKey });
         queryAll.push({ type: 'put', key: utxoNewKey, value: txRlp });
       }
-      
+
       await levelDB.batch(queryAll);
       
       this.transactions = this.transactions.slice(txCount);
+      console.log('New block created: ', this.newBlockNumber.toString(), ' ', 'transactions: ', txCount);
+
       this.newBlockNumber = this.newBlockNumber.add(new BN(config.contractblockStep));
       this.newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(this.newBlockNumber), blockNumberLength);
-      console.log('New block created: ', this.newBlockNumber.toString(), ' ', 'transactions: ', txCount);
 
       return true;
     }

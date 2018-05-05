@@ -21,7 +21,9 @@ class Block {
       let leaves = this.transactions.map(tx => {
         return { key: tx.token_id, hash: tx.getMerkleHash() };
       });
+
       this.merkle = new SparseMerkle(leaves);
+      this.merkle.buildTree();
       this.merkleRootHash = this.merkle.getMerkleRoot();
     }
   }

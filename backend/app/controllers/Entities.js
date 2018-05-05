@@ -85,9 +85,9 @@ router.route('/uxto')
       levelDB.createReadStream({gte: start, lte: end})
         .on('data', function (data) {
           let tx = new PlasmaTransaction(data.value);
-          
+        
           let txJson = tx.getJson();
-          outputJson.blockNumber = ethUtil.bufferToInt(data.key.slice(blockStart, txStart))
+          txJson.blockNumber = ethUtil.bufferToInt(data.key.slice(blockStart, txStart))
           uxtos.push(txJson);
         })
         .on('error', function (error) {

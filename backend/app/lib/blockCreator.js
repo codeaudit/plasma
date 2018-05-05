@@ -82,7 +82,7 @@ class BlockCreator {
   }
     
   async processBlock(lastCheckedBlock, lastBlock) {
-    const depositEventsInBlock = await contractHandler.contract.getPastEvents("Deposit", {
+    const depositEventsInBlock = await contractHandler.contract.getPastEvents("DepositAdded", {
       fromBlock: lastCheckedBlock,
       toBlock: lastBlock
     });
@@ -97,23 +97,48 @@ class BlockCreator {
     const newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(blockNumberBN), blockNumberLength);
     await levelDB.put(config.prefixes.lastEventProcessedBlockPrefix, newBlockNumberBuffer);
   } 
-  
-  async startBlockSubmittingToParent() {
-    try {
-      let lastSubmittedBlock;
-      let currentBlockInParent = await contractHandler.contract.methods.currentBlock().call();
-      currentBlockInParent = Web3.utils.toBN(currentBlockInParent);
 
+  async startBlockSubmittingToParent() {
+    try {    
+      let lastBlockInDatabase;
+      try{
+        lastBlockInDatabase = await levelDB.get('lastBlockNumber');
+      }
+      catch(error) {
+        lastBlockInDatabase = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(0)), blockNumberLength);
+        await levelDB.put('lastBlockNumber', lastBlockInDatabase);
+      }
+      lastBlockInDatabase = Web3.utils.toBN(ethUtil.addHexPrefix(lastBlockInDatabase.toString('hex')));
+
+      let lastSubmittedBlock;
       try {
         lastSubmittedBlock = await levelDB.get(lastBlockSubmittedToParentPrefix);
       }  catch(error) {
-        lastSubmittedBlock = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(0)),blockNumberLength);
+        lastSubmittedBlock = ethUtil.setLengthLeft(ethUtil.toBuffer(new BN(0)), blockNumberLength);
       }
       lastSubmittedBlock = Web3.utils.toBN(ethUtil.addHexPrefix(lastSubmittedBlock.toString('hex')));
 
-      if (!currentBlockInParent.gt(lastSubmittedBlock)) {
+      if (!lastBlockInDatabase.gt(lastSubmittedBlock)) {
+        console.log('lastBlockInDatabase <= lastSubmittedBlock');
         return setTimeout(() => this.startBlockSubmittingToParent(), 10000);
       }
+      
+      let currentBlockInParent = await contractHandler.contract.methods.current_blk().call();
+      currentBlockInParent = Web3.utils.toBN(currentBlockInParent);
+      if (!currentBlockInParent.eq(lastSubmittedBlock)) {
+        console.log('currentBlockInParent != lastSubmittedBlock');
+        if (currentBlockInParent.gt(lastSubmittedBlock)) {
+          console.log('currentBlockInParent > lastSubmittedBlock');
+          let lastSubmittedBlockBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(currentBlockInParent), blockNumberLength);
+          await levelDB.put(lastBlockSubmittedToParentPrefix, lastSubmittedBlockBuffer);
+        }
+        return setTimeout(() => this.startBlockSubmittingToParent(), 10000);
+      }
+
+      console.log('currentBlockInParent--', currentBlockInParent.toString());
+      console.log('lastBlockInDatabase---', lastBlockInDatabase.toString());
+      console.log('lastSubmittedBlock----', lastSubmittedBlock.toString());
+
       lastSubmittedBlock = lastSubmittedBlock.add(new BN(config.contractblockStep));
       
       await this.startBlockSubmit(lastSubmittedBlock);
@@ -134,11 +159,12 @@ class BlockCreator {
     let blockBin = await levelDB.get(blockKey);
     let block = new Block(blockBin);
     let blockMerkleRootHash = ethUtil.addHexPrefix(block.merkleRootHash.toString('hex'));
-
+    let submitedBlockNumber = ethUtil.bufferToInt(blockNumber);
+    
     await web3.eth.personal.unlockAccount(plasmaOperatorAddress, config.plasmaOperatorPassword, 60);
-    let gas = await contractHandler.contract.methods.submitBlock(blockMerkleRootHash).estimateGas({from: plasmaOperatorAddress});
+    let gas = await contractHandler.contract.methods.submitBlock(blockMerkleRootHash, submitedBlockNumber).estimateGas({from: plasmaOperatorAddress});
 
-    let res = await contractHandler.contract.methods.submitBlock(blockMerkleRootHash).send({from: plasmaOperatorAddress, gas});
+    let res = await contractHandler.contract.methods.submitBlock(blockMerkleRootHash, submitedBlockNumber).send({from: plasmaOperatorAddress, gas});
     logger.info('Submitetd block ', blockNumber.toString());
 
     await levelDB.put(lastBlockSubmittedToParentPrefix, blockNumberBuffer);

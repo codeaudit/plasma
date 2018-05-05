@@ -159,11 +159,11 @@ contract Root {
             time: block.timestamp
         });
         childChain[block_num] = newBlock;
+        current_blk = current_blk.add(1);
         emit BlockSubmitted(msg.sender, merkleRoot, block_num);
     }
 
     function deposit() public payable {
-        require(operators[msg.sender] || msg.sender == authority);
         Token memory token;
         token.denomination = msg.value;
         token.token_id = uint(keccak256(msg.sender, msg.value, deposit_blk));
