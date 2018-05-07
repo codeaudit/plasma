@@ -3,6 +3,7 @@
 var assert = require('assert');
 import SparseMerkle from '../app/lib/SparseMerkle';
 import ethUtil from 'ethereumjs-util';
+const BN = ethUtil.BN;
 
 describe('Merkle', function() {
   describe('checkProof', function() {
@@ -12,9 +13,12 @@ describe('Merkle', function() {
       }
 
       let leaves = [];
+
       for (let i = 1; i < 500; i++) {
+        let key = ethUtil.sha3(getRandomInt(100000, 100000000000000));
+        key = new BN(key, 16).toString(10);
         leaves.push({
-          key: ethUtil.sha3(getRandomInt(100000, 100000000000000)),
+          key,
           hash: ethUtil.sha3(getRandomInt(100000, 100000000000000))
         });
       }
@@ -25,6 +29,7 @@ describe('Merkle', function() {
       leaves.forEach(leaf => {
         let proof = tree.getProof(leaf);
         let proofIsValid = tree.checkProof(proof, leaf.hash, tree.getMerkleRoot());
+
         assert(proofIsValid);
       });
     });
@@ -36,8 +41,10 @@ describe('Merkle', function() {
 
       let leaves = [];
       for (let i = 1; i < 500; i++) {
+        let key = ethUtil.sha3(getRandomInt(100000, 100000000000000));
+        key = new BN(key, 16).toString(10);
         leaves.push({
-          key: ethUtil.sha3(getRandomInt(100000, 100000000000000)),
+          key,
           hash: ethUtil.sha3(getRandomInt(100000, 100000000000000))
         });
       }

@@ -1,6 +1,7 @@
 'use strict';
 
 import ethUtil from 'ethereumjs-util';
+const BN = ethUtil.BN;
 
 class Merkle {
   constructor (leaves) {
@@ -74,6 +75,7 @@ class Merkle {
       if (!neighborLeafHash) {
         neighborLeafHash = this.defaultHashes[this.depth - level];
       }
+
       if (returnBinary) {
         proof.push(new Buffer(isEvenLeaf ? [0x01] : [0x00]));
         proof.push(neighborLeafHash);
@@ -95,6 +97,7 @@ class Merkle {
       let currentProofHash = proof[level];
       hash = currentProofHash.right ? ethUtil.sha3(Buffer.concat([ hash, currentProofHash.right ])) : ethUtil.sha3(Buffer.concat([ currentProofHash.left, hash ]));
     }
+
     return hash.toString('hex') == merkleRoot.toString('hex');
   }
 
@@ -107,7 +110,7 @@ class Merkle {
     return hexRegex.test(value);
   }
 
-  toBinaryString(value) {
+  toBinaryString_(value) {
     let hexValue = this.toHexString(value);
 
     if (hexValue) {
@@ -115,6 +118,19 @@ class Merkle {
     } else {
       throw new Error(`Unsupported format: ${value}`);
     }
+  }
+
+  toBinaryString(value) {
+    // let hexValue = this.toHexString(value);
+    if (value instanceof Buffer) {
+      value = value.toString();
+    }
+    return new BN(value, 10).toString(2).padStart(256, '0');
+    // if (hexValue) {
+    //   return this.hexToBin(hexValue);
+    // } else {
+    //   throw new Error(`Unsupported format: ${value}`);
+    // }
   }
 
   toHexString(value) {

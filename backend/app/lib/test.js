@@ -5,8 +5,6 @@ import levelDB from 'lib/db';
 import web3     from 'lib/web3';
 import Promise from 'bluebird';
 import {
-  txNumberLength,
-  txOutputNumberLength,
   blockNumberLength
 } from 'lib/dataStructureLengths';
 import config from "../config";

@@ -18,7 +18,7 @@ services:
       PLASMA_OPERATOR_ADDRESS: '0x4DC884abB17d11DE6102fC1ef2ceE0EbD31DF248'
       PLASMA_OPERATOR_PRIVATE: ''
       PLASMA_OPERATOR_PASSWORD: ''
-    command: 'npm run development'
+    command: 'sleep 100000000'
     logging:
       options:
         max-size: 1000m

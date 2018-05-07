@@ -8,4 +8,4 @@ WORKDIR /usr/src/app
 
 COPY package.json /usr/src/
 
-RUN cd ../ && npm i && npm i -g nodemon && npm i -g sequelize-cli@3.0.0 && npm i -g apidoc && npm i -g babel-cli
+RUN cd ../ && npm i && npm i -g nodemon && npm i -g babel-cli

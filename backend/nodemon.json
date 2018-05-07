@@ -5,7 +5,7 @@
     "app/logs/*",
     "node_modules/**/node_modules",
     "apidoc/*",
-    "../logs/",
+    "/usr/src/app/app/logs",
     "/usr/src/app/leveldb"
   ],
   "verbose": true,

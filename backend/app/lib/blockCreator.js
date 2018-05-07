@@ -12,7 +12,7 @@ import levelDB from 'lib/db';
 import contractHandler from 'lib/contracts/plasma';
 import depositEventHandler from 'lib/handlers/DepositEventHandler';
 
-import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
+import { blockNumberLength } from 'lib/dataStructureLengths';
 
 const Web3 = require('web3');
 import web3 from 'lib/web3';
@@ -56,7 +56,7 @@ class BlockCreator {
   
   async initBlockPeriodicalCreation() {
     if (!(this.options.minTransactionsInBlock && txPool.transactions.length < this.options.minTransactionsInBlock)) {
-      const newBlock = await txPool.createNewBlock();
+      let newBlock = await txPool.createNewBlock();
     }
     
     setTimeout(() => this.initBlockPeriodicalCreation(), blockCreationPeriod)
@@ -67,6 +67,7 @@ class BlockCreator {
     try{
       let lastblock = await web3.eth.getBlockNumber();
       if (lastblock > lastCheckedBlock) {
+        lastCheckedBlock = lastCheckedBlock + 1;
         await this.processBlock(lastCheckedBlock, lastblock);
         setTimeout(() => this.processPeriodicalBlockEventsCheck(lastblock), 5000);
         return;
@@ -119,25 +120,18 @@ class BlockCreator {
       lastSubmittedBlock = Web3.utils.toBN(ethUtil.addHexPrefix(lastSubmittedBlock.toString('hex')));
 
       if (!lastBlockInDatabase.gt(lastSubmittedBlock)) {
-        console.log('lastBlockInDatabase <= lastSubmittedBlock');
         return setTimeout(() => this.startBlockSubmittingToParent(), 10000);
       }
       
       let currentBlockInParent = await contractHandler.contract.methods.current_blk().call();
       currentBlockInParent = Web3.utils.toBN(currentBlockInParent);
       if (!currentBlockInParent.eq(lastSubmittedBlock)) {
-        console.log('currentBlockInParent != lastSubmittedBlock');
         if (currentBlockInParent.gt(lastSubmittedBlock)) {
-          console.log('currentBlockInParent > lastSubmittedBlock');
           let lastSubmittedBlockBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(currentBlockInParent), blockNumberLength);
           await levelDB.put(lastBlockSubmittedToParentPrefix, lastSubmittedBlockBuffer);
         }
         return setTimeout(() => this.startBlockSubmittingToParent(), 10000);
       }
-
-      console.log('currentBlockInParent--', currentBlockInParent.toString());
-      console.log('lastBlockInDatabase---', lastBlockInDatabase.toString());
-      console.log('lastSubmittedBlock----', lastSubmittedBlock.toString());
 
       lastSubmittedBlock = lastSubmittedBlock.add(new BN(config.contractblockStep));
       

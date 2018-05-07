@@ -17,7 +17,6 @@ import txPool from 'lib/txPool';
 
 async function processDepositEvent(event){
   const { depositor, amount, depositBlock, blockNumber } = event.returnValues;
-  
   let depositBlockIndexKey = Buffer.concat([config.prefixes.tokenIdPrefix, ethUtil.toBuffer(depositBlock)]);
 
   try {

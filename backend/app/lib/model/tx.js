@@ -1,9 +1,6 @@
 'use strict';
 
-import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
-
 import RLP from 'rlp';
-
 const ethUtil = require('ethereumjs-util');
 const BN = ethUtil.BN;
 
@@ -35,7 +32,7 @@ function initFields(self, fields, data) {
       }
       self[field.name] = value;
     });
-  } 
+  }
 }
 
 class PlasmaTransaction {
@@ -43,21 +40,20 @@ class PlasmaTransaction {
     data = data || {};
 
     initFields(this, transactionFields, data);
-
-    // this._inputs = [];
-    // this._outputs = [];
-    // this._outputsRlp = [];
   }
 
   getRlp(excludeSignature) {
-    let data = transactionFields.reduce((res, field) => {
-      if (!(excludeSignature && field.name == 'signature')) {
-        res.push(this[field.name]);
-      }
-      return res;
-    }, []);
+    let dataToEncode = [
+      this.prev_hash instanceof Buffer ? this.prev_hash : ethUtil.addHexPrefix(this.prev_hash),
+      this.prev_block,
+      ethUtil.toBuffer(this.token_id),
+      this.new_owner
+    ];
+    if (!(excludeSignature)) {
+      dataToEncode.push(this.signature);
+    }
 
-    this._rlp = RLP.encode(data);
+    this._rlp = RLP.encode(dataToEncode);
     return this._rlp;
   }
 
@@ -71,8 +67,8 @@ class PlasmaTransaction {
   }
 
   getAddressFromSignature(hex) {
-    let txRlpEncoded = ethUtil.sha3(this.getRlp(true));
-    let txRlpHashed =  ethUtil.hashPersonalMessage(txRlpEncoded);
+    let txRlpEncoded = this.getHash(true);
+    let txRlpHashed = ethUtil.hashPersonalMessage(txRlpEncoded);
     if (this.signature) {
       let { v, r, s } = ethUtil.fromRpcSig(ethUtil.addHexPrefix(this.signature));
       let publicAddress = ethUtil.ecrecover(Buffer.from(txRlpHashed, 'hex'), v, r, s);
@@ -87,12 +83,9 @@ class PlasmaTransaction {
 
   validate () {
     let isValid = true;
-    for (let index of [1, 2]) {
-      if (this[`blockNumber${index}`] && !this.getAddressFromSignature(index)) {
-        isValid = false;
-      }
+    if (this.signature && !this.getAddressFromSignature()) {
+      isValid = false;
     }
-
     return isValid;
   }
 
@@ -106,27 +99,12 @@ class PlasmaTransaction {
   getJson() {
     let data = {};
     data.prev_block = ethUtil.bufferToInt(this.prev_block.toString());
-    data.token_id = this.token_id.toString('hex');
+    data.token_id = this.token_id.toString();
     data.new_owner = ethUtil.addHexPrefix(this.new_owner.toString('hex'));
     data.signature = ethUtil.addHexPrefix(this.signature.toString('hex'));
 
     return data;
   }
-
-  // sign1(key) {
-  //   var rsv = ethUtil.ecsign(this.getHash(true) , Buffer.from(key) );
-  //   this.sig1 = "0x" + ( Buffer.concat([new Buffer(rsv.r), new Buffer(rsv.s), new Buffer([rsv.v])]).toString('hex')); 
-  // }
-  // 
-  // sign2(key) {
-  //     var rsv = ethUtil.ecsign(ethUtil.toBuffer(this.getHash(false)) , ethUtil.toBuffer(key) );
-  //     this.sig2 = "0x" + ( Buffer.concat([new Buffer(rsv.r), new Buffer(rsv.s), new Buffer([rsv.v])]).toString('hex')); 
-  // } 
-
-  // confirm(root, key) {
-  //   var rsv = ethUtil.ecsign(ethUtil.sha3( Buffer.concat([  this.getHash(true), ethUtil.toBuffer(root)  ])) , Buffer.from(key) );
-  //   return "0x" + ( Buffer.concat([new Buffer(rsv.r), new Buffer(rsv.s), new Buffer([rsv.v])]).toString('hex')); 
-  // }
 }
 
 module.exports = { PlasmaTransaction };

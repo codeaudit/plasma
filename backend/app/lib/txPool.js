@@ -8,11 +8,10 @@ const BN = ethUtil.BN;
 
 import levelDB from 'lib/db';
 import { logger } from 'lib/logger';
-import { blockNumberLength, txNumberLength, txOutputNumberLength } from 'lib/dataStructureLengths';
+import { blockNumberLength, tokenIdLength } from 'lib/dataStructureLengths';
 import { getUTXO } from 'lib/tx';
-const { prefixes: { blockPrefix, transactionPrefix, utxoPrefix, lastBlockSubmittedToParentPrefix } } = config;
+const { prefixes: { blockPrefix, transactionPrefix, utxoPrefix } } = config;
 
-const depositInputKey = new Buffer(blockNumberLength + txNumberLength + txOutputNumberLength).toString('hex');/////
 const depositPreviousBlockBn = new BN(0);
 
 class TXPool {
@@ -33,7 +32,6 @@ class TXPool {
     }
 
     let isValid = await this.checkTransaction(tx);
-
     if (!isValid) {
       return false;
     }
@@ -52,19 +50,14 @@ class TXPool {
         if (!valid) {
           return false;
         }
-      } else {
-        let newowner = ethUtil.addHexPrefix(transaction.new_owner.toString('hex').toLowerCase());
-        if (address != newowner) {
-          return false;
-        }
-        
-        let utxo = await getUTXO(transaction.prev_block, token_id);
+      } else {      
+        let utxo = await getUTXO(transaction.prev_block, transaction.token_id);
         if (!utxo) {
           return false;
         }
+        
         let utxoOwnerAddress = ethUtil.addHexPrefix(utxo.new_owner.toString('hex').toLowerCase());
-
-        if (utxoOwnerAddress != newowner) { //check utxo previous owner
+        if (utxoOwnerAddress != address) {
           return false;
         }
         transaction.prev_hash = utxo.getHash();
@@ -121,9 +114,11 @@ class TXPool {
       
       for (let tx of block.transactions) {
         let utxoPrevBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(tx.prev_block), blockNumberLength);
+        let tokenIdBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(tx.token_id), tokenIdLength)
+
         let txRlp = tx.getRlp();
-        let utxoNewKey = Buffer.concat([utxoPrefix, block.blockNumber, ethUtil.toBuffer(tx.token_id)]);
-        let utxoOldKey = Buffer.concat([utxoPrefix, utxoPrevBlockNumberBuffer, ethUtil.toBuffer(tx.token_id)]);
+        let utxoNewKey = Buffer.concat([utxoPrefix, block.blockNumber, tokenIdBuffer]);
+        let utxoOldKey = Buffer.concat([utxoPrefix, utxoPrevBlockNumberBuffer, tokenIdBuffer]);
 
         queryAll.push({ type: 'del', key: utxoOldKey });
         queryAll.push({ type: 'put', key: utxoNewKey, value: txRlp });
@@ -137,7 +132,7 @@ class TXPool {
       this.newBlockNumber = this.newBlockNumber.add(new BN(config.contractblockStep));
       this.newBlockNumberBuffer = ethUtil.setLengthLeft(ethUtil.toBuffer(this.newBlockNumber), blockNumberLength);
 
-      return true;
+      return block;
     }
     catch(err){
       logger.error('createNewBlock error ', err);

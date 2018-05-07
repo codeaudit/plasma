@@ -175,6 +175,7 @@ contract Root {
         depo.time = block.timestamp;
         depo.depositor = msg.sender;
         deposits[deposit_blk] = depo;
+        deposit_blk = deposit_blk.add(1);
         emit DepositAdded(msg.sender, msg.value, token.token_id, depo.block_num);
     }
 

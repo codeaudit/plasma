@@ -13,10 +13,10 @@ const BN = ethUtil.BN;
 import Block from 'lib/model/block';
 const { prefixes: { utxoPrefix } } = config;
 import { PlasmaTransaction } from 'lib/model/tx';
+import { getAllUtxos } from 'lib/tx';
 
 import {
   tokenIdLength,
-  txOutputNumberLength,
   blockNumberLength
 } from 'lib/dataStructureLengths';
 
@@ -75,7 +75,8 @@ router.route('/uxto')
         Buffer.alloc(tokenIdLength)
       ]);
       const end = Buffer.concat([utxoPrefix, 
-        Buffer.from("ff".repeat(blockNumberLength + tokenIdLength), 'hex')]
+        Buffer.from("ff".repeat(blockNumberLength), 'hex'),
+        Buffer.from("9".repeat(tokenIdLength))]
       );
       
       let blockStart = utxoPrefix.length;
@@ -101,5 +102,5 @@ router.route('/uxto')
       console.log('error', error);
     }
   })
-
+    
 module.exports = router;
